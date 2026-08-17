@@ -1,0 +1,3 @@
+name,lp_file,basis_file,basis_description
+scenario_a,/path/to/scenario_a.lp.gz,/path/to/scenario_a.bas.gz,basis generated from scenario A
+scenario_b,/path/to/scenario_b.zip,/path/to/scenario_b_basis.zip,basis generated from scenario B
