@@ -1,0 +1,4 @@
+# Simple Xpress control file used by the shared Xpress adapter.
+THREADS=8
+PRESOLVE=1
+# LPFLAGS=...

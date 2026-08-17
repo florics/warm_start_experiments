@@ -1,0 +1,7 @@
+name,lp_file
+nomods,/scratch/opt/lmehl/instances/base/2050-100-el_eff-nothingmodified.lp
+nomods_d1p01,/scratch/opt/lmehl/instances/scenario_catalogue/2050-100-el_eff-nothingmodified_d1p01.lp.gz
+nomods_d1p02,/scratch/opt/lmehl/instances/scenario_catalogue/2050-100-el_eff-nothingmodified_d1p02.lp.gz
+nomods_d1p03,/scratch/opt/lmehl/instances/scenario_catalogue/2050-100-el_eff-nothingmodified_d1p03.lp.gz
+nomods_d1p04,/scratch/opt/lmehl/instances/scenario_catalogue/2050-100-el_eff-nothingmodified_d1p04.lp.gz
+nomods_d1p05,/scratch/opt/lmehl/instances/scenario_catalogue/2050-100-el_eff-nothingmodified_d1p05.lp.gz

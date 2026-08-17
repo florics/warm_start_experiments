@@ -1,0 +1,2 @@
+solver,parameter_name,parameter_file
+xpress,barrier_16,/scratch/htc/lmehl/master_thesis/base_problems/xpress/parameters/barrier_wCrssvr_16Thrds.prs

@@ -1,0 +1,2 @@
+solver,parameter_name,parameter_file
+copt,barrier_16,/scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/barrier_wCrssvr_16Thrds.par

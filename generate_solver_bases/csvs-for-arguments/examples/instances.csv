@@ -1,0 +1,3 @@
+name,lp_file
+scenario_a,/path/to/scenario_a.lp.gz
+scenario_b,/path/to/scenario_b.zip

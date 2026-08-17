@@ -1,0 +1,8 @@
+solver,parameter_name,parameter_file
+copt,barrier_16,/scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/barrier_wCrssvr_16Thrds.par
+xpress,barrier_16,/scratch/htc/lmehl/master_thesis/base_problems/xpress/parameters/barrier_wCrssvr_16Thrds.prs
+copt,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/dualsmplx_1Thrd.par
+gurobi,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/gurobi/parameters/dualsmplx_1Thrd.prm
+highs,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/highs/parameters/dualsmplx_serial_1Thrd.txt
+gurobi,primal_1,/scratch/htc/lmehl/master_thesis/base_problems/gurobi/parameters/primalsmplx_1Thrd.prm
+highs,primal_1,/scratch/htc/lmehl/master_thesis/base_problems/highs/parameters/primalsmplx_1Thrd.txt

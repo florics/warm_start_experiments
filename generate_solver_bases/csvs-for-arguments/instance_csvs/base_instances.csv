@@ -1,0 +1,3 @@
+name,lp_file
+nomods,/scratch/opt/lmehl/instances/base/2050-100-el_eff-nothingmodified.lp
+3cm_br_ivm,/scratch/opt/lmehl/instances/base/2050-100-el_eff-3costmods-1e9boundsremoved-investvarsmerged.lp

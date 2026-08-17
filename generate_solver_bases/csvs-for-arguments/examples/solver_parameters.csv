@@ -1,0 +1,5 @@
+solver,parameter_name,parameter_file
+gurobi,dual_simplex,/path/to/gurobi_dual.prm
+copt,dual_simplex,/path/to/copt_dual.par
+highs,dual_simplex,/path/to/highs_dual.options
+xpress,dual_simplex,/path/to/xpress_dual.prs
