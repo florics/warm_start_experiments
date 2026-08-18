@@ -2,8 +2,8 @@
 
 #SBATCH --job-name=mthesis_compute_sbases
 #output paths have to adjusted to your folders
-#SBATCH --output=/scratch/htc/lmehl/master_thesis/warm_start_experiments/results/generate_solver_bases/job_out/sbatch_job_%A.out
-#SBATCH --error=/scratch/htc/lmehl/master_thesis/warm_start_experiments/results/generate_solver_bases/job_out/sbatch_job_%A.err
+#SBATCH --output=/scratch/htc/lmehl/master_thesis/warm_start_experiments/generate_solver_bases/results/job_out/sbatch_job_%A.out
+#SBATCH --error=/scratch/htc/lmehl/master_thesis/warm_start_experiments/generate_solver_bases/results/job_out/sbatch_job_%A.err
 #SBATCH --partition=big
 #SBATCH --time=10:00:00
 #SBATCH --mem=10G
@@ -98,16 +98,6 @@ echo "------ (end of hardware info) ------"
 
 source ~/conda_init
 
-python /scratch/htc/lmehl/master_thesis/generate_solver_bases/generate_bases.py "$@"
+python /scratch/htc/lmehl/master_thesis/warm_start_experiments/generate_solver_bases/generate_bases.py "$@"
 
 #python /scratch/htc/lmehl/master_thesis/generate_solver_bases/generate_bases.py  /scratch/htc/lmehl/master_thesis/generate_solver_bases/examples/instances.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/examples/solver_parameters_16Thrds.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/output/
-
-# usage / todos
-
-# sbatch /scratch/htc/lmehl/master_thesis/generate_solver_bases/run_on_cluster.sh /scratch/htc/lmehl/master_thesis/generate_solver_bases/instance_csvs/nomods_d1p00-1p05_instances.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/parameter_csvs/simplex_copt-gurobi-highs.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/output/
-
-# sbatch /scratch/htc/lmehl/master_thesis/generate_solver_bases/run_on_cluster.sh /scratch/htc/lmehl/master_thesis/generate_solver_bases/instance_csvs/3cm-br-ivm_d1p00-1p05_instances.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/parameter_csvs/simplex_copt-gurobi-highs.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/output/
-
-# sbatch --cpus-per-task=16 /scratch/htc/lmehl/master_thesis/generate_solver_bases/run_on_cluster.sh /scratch/htc/lmehl/master_thesis/generate_solver_bases/instance_csvs/nomods_d1p00-1p05_instances.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/parameter_csvs/copt_barrier_16Thrds.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/output/
-
-# sbatch --cpus-per-task=16 /scratch/htc/lmehl/master_thesis/generate_solver_bases/run_on_cluster.sh /scratch/htc/lmehl/master_thesis/generate_solver_bases/instance_csvs/3cm-br-ivm_d1p00-1p05_instances.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/parameter_csvs/xpress_barrier_16Thrds.csv /scratch/htc/lmehl/master_thesis/generate_solver_bases/output/
