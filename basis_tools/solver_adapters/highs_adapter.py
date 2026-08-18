@@ -184,9 +184,13 @@ class HighsAdapter:
         return x
 
     def extract_ebf_entries(self,handle,*,tolerance=1e-9):
-        h=handle.highs; lp=h.getLp(); solution=h.getSolution(); basis=h.getBasis()
+        h=handle.highs
+        lp=h.getLp()
+        solution=h.getSolution()
+        basis=h.getBasis()
         if not bool(getattr(basis,"valid",False)): raise RuntimeError("HiGHS has no valid basis")
         col_values=list(solution.col_value); row_values=list(solution.row_value); col_status=list(basis.col_status); row_status=list(basis.row_status)
+        col_lower=list(lp.col_lower_); col_upper=list(lp.col_upper_); row_lower=list(lp.row_lower_); row_upper=list(lp.row_upper_)
         col_names,row_names=self._model_names(h); H=self.highspy.HighsBasisStatus
         def canonical(native,bound):
             if native==H.kBasic: return BasisStatus.BASIC
@@ -197,12 +201,20 @@ class HighsAdapter:
             raise ValueError(f"Unknown HiGHS basis status {native}")
         variables=[]
         for i in range(lp.num_col_):
-            value=float(col_values[i]); bound=classify_bound_status(self._canonical_bound(lp.col_lower_[i]),self._canonical_bound(lp.col_upper_[i]),value,tolerance=tolerance)
-            variables.append(VariableBasisEntry(col_names[i],canonical(col_status[i],bound),bound,value))
+            value=float(col_values[i])
+            lower=self._canonical_bound(col_lower[i])
+            upper=self._canonical_bound(col_upper[i])
+            bound=classify_bound_status(lower,upper,value,tolerance=tolerance)
+            entry=VariableBasisEntry(col_names[i],canonical(col_status[i],bound),bound,value)
+            variables.append(entry)
         constraints=[]
         for i in range(lp.num_row_):
-            activity=float(row_values[i]); bound=classify_bound_status(self._canonical_bound(lp.row_lower_[i]),self._canonical_bound(lp.row_upper_[i]),activity,tolerance=tolerance)
-            constraints.append(ConstraintBasisEntry(row_names[i],canonical(row_status[i],bound),bound,activity))
+            activity=float(row_values[i])
+            lower=self._canonical_bound(row_lower[i])
+            upper=self._canonical_bound(row_upper[i])
+            bound=classify_bound_status(lower,upper,activity,tolerance=tolerance)
+            entry=ConstraintBasisEntry(row_names[i],canonical(row_status[i],bound),bound,activity)
+            constraints.append(entry)
         return variables,constraints
 
     def dispose(self,handle):
