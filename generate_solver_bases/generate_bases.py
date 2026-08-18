@@ -130,6 +130,8 @@ def solve_one(instance,config,copied_parameter_file,run_dir,solver_version,*,bou
     log_file=log_dir/f"{prefix}.log"; basis_file=output_path(basis_dir/f"{instance_safe}.bas",compress=compress_output); ebf_vars_file=output_path(ebf_dir/f"{instance_safe}__vars.csv",compress=compress_output); ebf_constrs_file=output_path(ebf_dir/f"{instance_safe}__constrs.csv",compress=compress_output); fmt=get_format_info()
     result={"timestamp":timestamp,"instance_name":instance["name"],"lp_file":str(instance["lp_file"]),"solver":solver,"solver_version":solver_version,"parameter_name":config["parameter_name"],"parameter_file":str(config["parameter_file"]),"copied_parameter_file":str(copied_parameter_file),"log_file":str(log_file),"basis_file":"","ebf_vars_file":"","ebf_constrs_file":"","ebf_format_version":fmt["version"],"bound_tolerance":bound_tolerance,"status":"","status_code":"","objective_value":"","solve_time_s":"","external_wallclock_s":"","simplex_iterations":"","barrier_iterations":"","work_units":"","result":"ERROR","message":""}
     print("\n"+"="*100); print(f"Instance       : {instance['name']}\nLP             : {instance['lp_file']}\nSolver         : {solver}\nParameter set  : {config['parameter_name']}\nParameter file : {copied_parameter_file}\nBAS output     : {basis_file}\nEBF variables  : {ebf_vars_file}\nEBF constraints: {ebf_constrs_file}"); print("="*100)
+    # HiGHS writes directly to stdout, so flush Python's run banner first.
+    sys.stdout.flush()
     adapter=model=None
     try:
         adapter=get_solver_adapter(solver); model=adapter.load_model(instance["lp_file"]); adapter.read_parameters(model,copied_parameter_file); adapter.set_log_file(model,log_file)
