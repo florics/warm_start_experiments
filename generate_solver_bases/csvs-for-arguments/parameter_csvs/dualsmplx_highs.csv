@@ -1,0 +1,2 @@
+solver,parameter_name,parameter_file
+highs,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/highs/parameters/dualsmplx_serial_1Thrd.txt

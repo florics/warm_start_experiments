@@ -1,0 +1,2 @@
+solver,parameter_name,parameter_file
+gurobi,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/gurobi/parameters/dualsmplx_1Thrd.prm

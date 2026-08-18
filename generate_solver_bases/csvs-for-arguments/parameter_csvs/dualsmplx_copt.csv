@@ -1,0 +1,2 @@
+solver,parameter_name,parameter_file
+copt,dual_1,/scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/dualsmplx_1Thrd.par
