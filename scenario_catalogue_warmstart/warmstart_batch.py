@@ -141,7 +141,7 @@ def write_selected_experiments_csv(path,experiments):
 
 def write_ebf_files(adapter,model,output_dir,prefix,tolerance,compress_output):
     vars_path,constrs_path=ebf_output_paths(output_dir,prefix,compress=compress_output)
-    export_ebf(adapter,model,vars_path,constrs_path,tolerance=tolerance,validate=True,write_before_validation=False)
+    export_ebf(adapter,model,vars_path,constrs_path,tolerance=tolerance,validate=True,write_before_validation=True)
     return vars_path,constrs_path
 
 
@@ -194,7 +194,9 @@ def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basi
                 except Exception as exc: row["message"]=append_message(row["message"],f"basis write failed: {exc}"); print(f"WARNING: basis write failed: {exc}")
                 try:
                     ebf_prefix=f"{sanitize_filename(target['name'])}__warm_from__{sanitize_filename(source['name'])}"; vars_path,constrs_path=write_ebf_files(adapter,model,ebf_dir,ebf_prefix,bound_tolerance,compress_output); row["ebf_vars_csv"],row["ebf_constrs_csv"]=str(vars_path),str(constrs_path); print(f"Wrote EBF 1.1 files:\n  {vars_path}\n  {constrs_path}")
-                except Exception as exc: row["message"]=append_message(row["message"],f"EBF export/validation failed: {exc}"); print(f"WARNING: EBF export/validation failed: {exc}")
+                except Exception as exc:
+                    vars_path,constrs_path=ebf_output_paths(ebf_dir,ebf_prefix,compress=compress_output); row["ebf_vars_csv"],row["ebf_constrs_csv"]=str(vars_path),str(constrs_path)
+                    row["message"]=append_message(row["message"],f"EBF validation failed; diagnostic EBF files were retained: {exc}"); print(f"WARNING: EBF validation failed; diagnostic EBF files were retained: {exc}")
         return row
     except Exception as exc:
         row["solver_status"]="ERROR"; row["message"]=append_message(row["message"],f"Fatal error: {exc}; traceback: {traceback.format_exc()}"); print(f"ERROR: {exc}"); return row

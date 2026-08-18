@@ -143,12 +143,12 @@ class CoptAdapter:
             raise ValueError(f"Unknown COPT basis status {native}")
         variables=[]
         for v,value,native in zip(vars_,values,vb):
-            value=float(value); bound=classify_bound_status(self._canonical_bound(v.LB),self._canonical_bound(v.UB),value,tolerance=tolerance)
-            variables.append(VariableBasisEntry(v.name,bs(native),bound,value))
+            value=float(value); lower=self._canonical_bound(v.LB); upper=self._canonical_bound(v.UB); bound=classify_bound_status(lower,upper,value,tolerance=tolerance)
+            variables.append(VariableBasisEntry(v.name,bs(native),bound,value,lower,upper))
         constraints=[]
         for c,activity,native in zip(cons,activities,cb):
-            bound=classify_bound_status(self._canonical_bound(c.LB),self._canonical_bound(c.UB),activity,tolerance=tolerance)
-            constraints.append(ConstraintBasisEntry(c.name,bs(native),bound,activity))
+            lower=self._canonical_bound(c.LB); upper=self._canonical_bound(c.UB); bound=classify_bound_status(lower,upper,activity,tolerance=tolerance)
+            constraints.append(ConstraintBasisEntry(c.name,bs(native),bound,activity,lower,upper))
         return variables,constraints
 
     def dispose(self,h):

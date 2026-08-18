@@ -187,21 +187,21 @@ class XpressAdapter:
         activities=list(self.xp.evaluate([c.getBody() for c in cons],problem=p)); row_status,col_status=self._get_basis(p)
         variables=[]
         for v,value,native in zip(vars_,values,col_status):
-            value=float(value); bound=classify_bound_status(self._canonical_bound(v.lb),self._canonical_bound(v.ub),value,tolerance=tolerance)
+            value=float(value); lower=self._canonical_bound(v.lb); upper=self._canonical_bound(v.ub); bound=classify_bound_status(lower,upper,value,tolerance=tolerance)
             if native==1: bs=BasisStatus.BASIC
             elif native==3: bs=BasisStatus.SUPERBASIC
             elif native==0 and bound in {BoundStatus.INTERIOR,BoundStatus.FREE}: bs=BasisStatus.SUPERBASIC
             elif native in {0,2}: bs=BasisStatus.NONBASIC
             else: raise ValueError(f"Unknown Xpress column basis status {native} for {v.name}")
-            variables.append(VariableBasisEntry(v.name,bs,bound,value))
+            variables.append(VariableBasisEntry(v.name,bs,bound,value,lower,upper))
         constraints=[]
         for c,activity,native in zip(cons,activities,row_status):
-            activity=float(activity); bound=classify_bound_status(self._canonical_bound(c.lb),self._canonical_bound(c.ub),activity,tolerance=tolerance)
+            activity=float(activity); lower=self._canonical_bound(c.lb); upper=self._canonical_bound(c.ub); bound=classify_bound_status(lower,upper,activity,tolerance=tolerance)
             if native==1: bs=BasisStatus.BASIC
             elif native==3: bs=BasisStatus.SUPERBASIC
             elif native in {0,2}: bs=BasisStatus.NONBASIC
             else: raise ValueError(f"Unknown Xpress row basis status {native} for {c.name}")
-            constraints.append(ConstraintBasisEntry(c.name,bs,bound,activity))
+            constraints.append(ConstraintBasisEntry(c.name,bs,bound,activity,lower,upper))
         return variables,constraints
 
     def dispose(self,p):

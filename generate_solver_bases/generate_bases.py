@@ -139,10 +139,12 @@ def solve_one(instance,config,copied_parameter_file,run_dir,solver_version,*,bou
         result.update({"status":native.get("status",""),"status_code":native.get("status_code",""),"objective_value":native.get("objective_value",""),"solve_time_s":native.get("solve_time_s",""),"external_wallclock_s":external,"simplex_iterations":native.get("simplex_iterations",""),"barrier_iterations":native.get("barrier_iterations",""),"work_units":native.get("work_units","")})
         adapter.print_diagnostics(model)
         if not native.get("is_optimal",False): result["result"]="NONOPTIMAL"; result["message"]="Optimization did not terminate with an optimal LP solution; basis was not written."; return result
+        validation_error=None
         try:
-            export_ebf(adapter,model,ebf_vars_file,ebf_constrs_file,tolerance=bound_tolerance,validate=True,write_before_validation=True); result["ebf_vars_file"]=str(ebf_vars_file); result["ebf_constrs_file"]=str(ebf_constrs_file)
+            export_ebf(adapter,model,ebf_vars_file,ebf_constrs_file,tolerance=bound_tolerance,validate=True,write_before_validation=True)
         except EBFValidationError as exc:
-            result["ebf_vars_file"]=str(ebf_vars_file); result["ebf_constrs_file"]=str(ebf_constrs_file); result["result"]="INVALID_SIMPLEX_BASIS"; result["message"]=str(exc); return result
+            validation_error=str(exc)
+        result["ebf_vars_file"]=str(ebf_vars_file); result["ebf_constrs_file"]=str(ebf_constrs_file)
         try:
             adapter.write_basis(model,basis_file)
             if not basis_file.is_file():
@@ -150,11 +152,16 @@ def solve_one(instance,config,copied_parameter_file,run_dir,solver_version,*,bou
         except Exception as exc:
             result["result"]="BASIS_WRITE_ERROR"
             result["message"]=(
-                "EBF was written and validated, but the classical "
-                f".bas basis could not be written: {exc}"
+                (f"EBF validation failed: {validation_error}; " if validation_error else "")
+                + f"classical .bas basis could not be written: {exc}"
             )
             return result
-        result["basis_file"]=str(basis_file); result["result"]="OK"; return result
+        result["basis_file"]=str(basis_file)
+        if validation_error:
+            result["result"]="INVALID_SIMPLEX_BASIS"; result["message"]=validation_error
+        else:
+            result["result"]="OK"
+        return result
     except Exception as exc:
         result["message"]=f"{exc}; traceback: {traceback.format_exc()}"; return result
     finally:

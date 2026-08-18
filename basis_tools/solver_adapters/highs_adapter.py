@@ -205,7 +205,7 @@ class HighsAdapter:
             lower=self._canonical_bound(col_lower[i])
             upper=self._canonical_bound(col_upper[i])
             bound=classify_bound_status(lower,upper,value,tolerance=tolerance)
-            entry=VariableBasisEntry(col_names[i],canonical(col_status[i],bound),bound,value)
+            entry=VariableBasisEntry(col_names[i],canonical(col_status[i],bound),bound,value,lower,upper)
             variables.append(entry)
         constraints=[]
         for i in range(lp.num_row_):
@@ -213,7 +213,7 @@ class HighsAdapter:
             lower=self._canonical_bound(row_lower[i])
             upper=self._canonical_bound(row_upper[i])
             bound=classify_bound_status(lower,upper,activity,tolerance=tolerance)
-            entry=ConstraintBasisEntry(row_names[i],canonical(row_status[i],bound),bound,activity)
+            entry=ConstraintBasisEntry(row_names[i],canonical(row_status[i],bound),bound,activity,lower,upper)
             constraints.append(entry)
         return variables,constraints
 

@@ -180,7 +180,7 @@ class GurobiAdapter:
             fixed = math.isfinite(lower) and math.isfinite(upper) and abs(upper-lower) <= tolerance
             if native == -1: bound_status = BoundStatus.FIXED if fixed else BoundStatus.LOWER
             elif native == -2: bound_status = BoundStatus.FIXED if fixed else BoundStatus.UPPER
-            variables.append(VariableBasisEntry(v.VarName, basis_status, bound_status, value))
+            variables.append(VariableBasisEntry(v.VarName, basis_status, bound_status, value, lower, upper))
         constraints = []
         for c in model.getConstrs():
             native = int(c.CBasis)
@@ -193,7 +193,7 @@ class GurobiAdapter:
             elif c.Sense == "=": lower = upper = float(c.RHS)
             else: raise ValueError(f"Unknown Gurobi sense {c.Sense!r} for {c.ConstrName}")
             bound_status = classify_bound_status(lower, upper, activity, tolerance=tolerance)
-            constraints.append(ConstraintBasisEntry(c.ConstrName, basis_status, bound_status, activity))
+            constraints.append(ConstraintBasisEntry(c.ConstrName, basis_status, bound_status, activity, lower, upper))
         return variables, constraints
 
     def get_num_rows(self, model):

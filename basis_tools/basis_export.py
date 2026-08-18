@@ -9,8 +9,9 @@ from .io_utils import output_path
 def export_ebf(adapter, model, vars_path, constrs_path, *, tolerance=1e-9, validate=True, write_before_validation=False):
     variables, constraints = adapter.extract_ebf_entries(model, tolerance=tolerance)
     if write_before_validation:
-        write_variable_basis_csv(vars_path, variables)
-        write_constraint_basis_csv(constrs_path, constraints)
+        # Preserve diagnostic artifacts even when the subsequent validation fails.
+        write_variable_basis_csv(vars_path, variables, validate=False)
+        write_constraint_basis_csv(constrs_path, constraints, validate=False)
     if validate:
         validate_simplex_basis(variables, constraints, num_rows=adapter.get_num_rows(model))
     if not write_before_validation:

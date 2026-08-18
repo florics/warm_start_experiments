@@ -47,6 +47,8 @@ class VariableBasisEntry:
     basis_status: BasisStatus
     bound_status: BoundStatus
     value: Optional[float]
+    lower_bound: Optional[float] = None
+    upper_bound: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ class ConstraintBasisEntry:
     basis_status: BasisStatus
     bound_status: BoundStatus
     activity: Optional[float]
+    lower_bound: Optional[float] = None
+    upper_bound: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -140,7 +144,13 @@ def validate_variable_entries(entries: Sequence[VariableBasisEntry]) -> None:
         if entry.var_name in seen:
             raise EBFValidationError(f"Duplicate variable entry: {entry.var_name}")
         seen.add(entry.var_name)
-        validate_status_pair(entry.basis_status, entry.bound_status, entity_name=f"variable {entry.var_name}")
+        try:
+            validate_status_pair(entry.basis_status, entry.bound_status, entity_name=f"variable {entry.var_name}")
+        except EBFValidationError as exc:
+            raise EBFValidationError(
+                f"{exc}; value={entry.value!r}; "
+                f"bounds=[{entry.lower_bound!r}, {entry.upper_bound!r}]"
+            ) from exc
 
 
 def validate_constraint_entries(entries: Sequence[ConstraintBasisEntry]) -> None:
@@ -151,7 +161,13 @@ def validate_constraint_entries(entries: Sequence[ConstraintBasisEntry]) -> None
         if entry.constr_name in seen:
             raise EBFValidationError(f"Duplicate constraint entry: {entry.constr_name}")
         seen.add(entry.constr_name)
-        validate_status_pair(entry.basis_status, entry.bound_status, entity_name=f"constraint {entry.constr_name}")
+        try:
+            validate_status_pair(entry.basis_status, entry.bound_status, entity_name=f"constraint {entry.constr_name}")
+        except EBFValidationError as exc:
+            raise EBFValidationError(
+                f"{exc}; activity={entry.activity!r}; "
+                f"bounds=[{entry.lower_bound!r}, {entry.upper_bound!r}]"
+            ) from exc
 
 
 def _parse_optional_float(text: str, *, field: str, row_number: int) -> Optional[float]:
