@@ -11,6 +11,7 @@ import argparse
 import csv
 import os
 import platform
+import random
 import shutil
 import socket
 import sys
@@ -40,8 +41,19 @@ def create_unique_run_dir(base_dir):
     base_dir=Path(base_dir).expanduser().resolve(); base_dir.mkdir(parents=True,exist_ok=True)
     while True:
         out=base_dir/f"run_{now_stamp()}"
-        if out.exists(): print(f"{out} already exists; waiting one second."); time.sleep(1); continue
-        out.mkdir(); return out
+        if out.exists():
+            delay=random.randint(1,60)
+            print(f"{out} already exists; waiting {delay} seconds.")
+            time.sleep(delay)
+            continue
+        try:
+            out.mkdir()
+        except FileExistsError:
+            delay=random.randint(1,60)
+            print(f"{out} was created by another job; waiting {delay} seconds.")
+            time.sleep(delay)
+            continue
+        return out
 
 def resolve_relative(path_text,parent):
     p=Path(path_text).expanduser(); return (p if p.is_absolute() else parent/p).resolve()

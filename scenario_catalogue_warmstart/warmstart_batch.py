@@ -12,6 +12,7 @@ import argparse
 import csv
 import os
 import platform
+import random
 import shutil
 import socket
 import sys
@@ -51,8 +52,19 @@ def create_unique_experiment_dir(base_results_dir: Path):
     base=Path(base_results_dir).expanduser().resolve(); base.mkdir(parents=True,exist_ok=True)
     while True:
         path=base/f"run_{timestamp_now()}"
-        if not path.exists(): path.mkdir(); return path
-        print(f"Experiment directory already exists: {path}\nWaiting one second before trying again."); time.sleep(1)
+        if path.exists():
+            delay=random.randint(1,60)
+            print(f"Experiment directory already exists: {path}\nWaiting {delay} seconds before trying again.")
+            time.sleep(delay)
+            continue
+        try:
+            path.mkdir()
+        except FileExistsError:
+            delay=random.randint(1,60)
+            print(f"Experiment directory was created by another job: {path}\nWaiting {delay} seconds before trying again.")
+            time.sleep(delay)
+            continue
+        return path
 
 
 def sanitize_filename(text):
