@@ -188,15 +188,16 @@ def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basi
     print(f"Solver                    : {adapter.name}\nTarget problem            : {target['name']}\nTarget LP                 : {target['lp_file']}\nWarm-start source         : {source['name']}\nWarm-start basis          : {source['basis_file']}\nBasis description         : {source['basis_description']}\nRepetition                : {repetition} / {total_repetitions}\nSolver log                : {log_file}")
     print("="*100+"\n")
     try:
-        print(f"Reading LP from disk:\n  {target['lp_file']}"); model=adapter.load_model(target["lp_file"])
-        print(f"Reading parameter/options file:\n  {param_file}"); adapter.read_parameters(model,param_file); adapter.validate_loaded_parameters(model); adapter.set_log_file(model,log_file); adapter.print_model_information(model)
+        print(f"Reading LP from disk:\n  {target['lp_file']}"); sys.stdout.flush(); model=adapter.load_model(target["lp_file"])
+        print(f"Reading parameter/options file:\n  {param_file}"); sys.stdout.flush(); adapter.read_parameters(model,param_file); adapter.validate_loaded_parameters(model); adapter.set_log_file(model,log_file); adapter.print_model_information(model)
         print(f"Reading warm-start basis from disk:\n  {source['basis_file']}")
+        sys.stdout.flush()
         try: adapter.read_basis(model,source["basis_file"])
         except Exception as exc:
             row["solver_status"]="BASIS_READ_ERROR"; row["message"]=f"Failed to read warm-start basis: {exc}. Optimization was NOT started."; print("ERROR: warm-start basis could not be loaded.\n"+row["message"]); return row
-        print("Warm-start basis loaded successfully.\nStarting optimization...")
+        print("Warm-start basis loaded successfully.\nStarting optimization..."); sys.stdout.flush()
         start=time.perf_counter(); adapter.optimize(model); wall=time.perf_counter()-start
-        result=adapter.collect_result(model,wall); adapter.print_postsolve_information(model,wall)
+        result=adapter.collect_result(model,wall); adapter.print_postsolve_information(model,wall); sys.stdout.flush()
         row.update({"solver_status":result.get("status",""),"status_code":result.get("status_code",""),"objective_value":result.get("objective_value",""),"solve_time_s":result.get("solve_time_s",""),"external_wallclock_s":result.get("external_wallclock_s",wall),"simplex_iterations":result.get("simplex_iterations",""),"work_units":result.get("work_units","")}); row["is_optimal"]=bool(result.get("is_optimal",False))
         if repetition==1 and row["is_optimal"]:
             if not adapter.has_basis(model): row["message"]=append_message(row["message"],"Optimal solve produced no valid basis; basis/EBF output skipped")
@@ -238,13 +239,14 @@ def main():
         experiments=build_all_experiments(datasets) if args.all_experiments else read_experiments_csv(experiments_csv,lookup)
         if not experiments: raise ValueError("No experiments selected")
         if not param_file.is_file(): raise FileNotFoundError(f"Parameter/options file not found: {param_file}")
-        print("Checking solver parameter/options file..."); validated=adapter.validate_parameter_file(param_file,experiments[0][0]["lp_file"])
+        print("Checking solver parameter/options file..."); sys.stdout.flush(); validated=adapter.validate_parameter_file(param_file,experiments[0][0]["lp_file"])
     except Exception as exc: print(f"\nPREFLIGHT CHECK FAILED:\n{exc}",file=sys.stderr); return 1
     total_runs=len(experiments)*args.repetitions
     print("\n"+"="*80+"\nEXPERIMENT PLAN\n"+"="*80); print(f"Solver                     : {adapter.name}\nDatasets                   : {len(datasets)}\nSelection mode             : {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nSelected experiments       : {len(experiments)}\nRepetitions per experiment : {args.repetitions}\nTotal optimization runs    : {total_runs}\nValidated solver settings  : {validated}\nEBF bound tolerance        : {args.bound_tolerance}\nCompress output            : {args.compress_output}")
     print("\nSelected experiments:")
     for i,(a,b) in enumerate(experiments,1): print(f"  [{i}] {a['name']} <- basis from {b['name']}")
     try:
+        sys.stdout.flush()
         experiment_dir=create_unique_experiment_dir(results_dir); log_dir=experiment_dir/"logs"; basis_dir=experiment_dir/"optimal_bases"; ebf_dir=experiment_dir/"ebf_bases"
         for d in (log_dir,basis_dir,ebf_dir): d.mkdir()
         copied_param=experiment_dir/adapter.input_parameter_filename; shutil.copy2(param_file,copied_param)
