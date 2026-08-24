@@ -242,12 +242,13 @@ def main():
         print("Checking solver parameter/options file..."); sys.stdout.flush(); validated=adapter.validate_parameter_file(param_file,experiments[0][0]["lp_file"])
     except Exception as exc: print(f"\nPREFLIGHT CHECK FAILED:\n{exc}",file=sys.stderr); return 1
     total_runs=len(experiments)*args.repetitions
-    print("\n"+"="*80+"\nEXPERIMENT PLAN\n"+"="*80); print(f"Solver                     : {adapter.name}\nDatasets                   : {len(datasets)}\nSelection mode             : {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nSelected experiments       : {len(experiments)}\nRepetitions per experiment : {args.repetitions}\nTotal optimization runs    : {total_runs}\nValidated solver settings  : {validated}\nEBF bound tolerance        : {args.bound_tolerance}\nCompress output            : {args.compress_output}")
-    print("\nSelected experiments:")
-    for i,(a,b) in enumerate(experiments,1): print(f"  [{i}] {a['name']} <- basis from {b['name']}")
     try:
         sys.stdout.flush()
-        experiment_dir=create_unique_experiment_dir(results_dir); log_dir=experiment_dir/"logs"; basis_dir=experiment_dir/"optimal_bases"; ebf_dir=experiment_dir/"ebf_bases"
+        experiment_dir=create_unique_experiment_dir(results_dir)
+        print("\n"+"="*80+"\nEXPERIMENT PLAN\n"+"="*80); print(f"Solver                     : {adapter.name}\nOutput folder              : {experiment_dir}\nDatasets                   : {len(datasets)}\nSelection mode             : {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nSelected experiments       : {len(experiments)}\nRepetitions per experiment : {args.repetitions}\nTotal optimization runs    : {total_runs}\nValidated solver settings  : {validated}\nEBF bound tolerance        : {args.bound_tolerance}\nCompress output            : {args.compress_output}")
+        print("\nSelected experiments:")
+        for i,(a,b) in enumerate(experiments,1): print(f"  [{i}] {a['name']} <- basis from {b['name']}")
+        log_dir=experiment_dir/"logs"; basis_dir=experiment_dir/"optimal_bases"; ebf_dir=experiment_dir/"ebf_bases"
         for d in (log_dir,basis_dir,ebf_dir): d.mkdir()
         copied_param=experiment_dir/adapter.input_parameter_filename; shutil.copy2(param_file,copied_param)
         effective_param=experiment_dir/adapter.effective_parameter_filename; adapter.write_effective_parameters(copied_param,experiments[0][0]["lp_file"],effective_param)
