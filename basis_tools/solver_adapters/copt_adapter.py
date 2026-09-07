@@ -112,6 +112,9 @@ class CoptAdapter:
         with materialize_output(output_path, expected_suffix=".bas") as local:
             h.model.writeBasis(str(local))
     write_native_basis = write_basis
+    def write_solution(self,h,output_path):
+        with materialize_output(output_path, expected_suffix=".sol") as local:
+            h.model.write(str(local))
     def write_exchange_bas(self, h, native_basis, exchange_bas): self.write_basis(h, exchange_bas)
     def get_num_rows(self,h): return int(self._safe_attr(h.model,"Rows"))
     def get_simplex_iterations(self,h): return self._safe_attr(h.model,"SimplexIter")
@@ -126,6 +129,12 @@ class CoptAdapter:
             try: return c.getName()
             except Exception: return c.name
         return ({vname(v): s == self.COPT.BASIS_BASIC for v,s in zip(vars_,vb)}, {cname(c): s == self.COPT.BASIS_BASIC for c,s in zip(cons,cb)})
+
+    def get_model_names(self,h):
+        def name(entity):
+            try: return entity.getName()
+            except Exception: return entity.name
+        return [name(v) for v in h.model.getVars()], [name(c) for c in h.model.getConstrs()]
 
     def _canonical_bound(self,value):
         x=float(value); inf=float(self.COPT.INFINITY)

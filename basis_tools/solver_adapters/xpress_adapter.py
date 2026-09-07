@@ -1,6 +1,8 @@
 from __future__ import annotations
 import math
 from pathlib import Path
+import tempfile
+import zipfile
 
 from basis_tools.ebf import BasisStatus, BoundStatus, ConstraintBasisEntry, VariableBasisEntry, classify_bound_status
 from basis_tools.io_utils import materialize_input, materialize_output
@@ -165,6 +167,19 @@ class XpressAdapter:
             elif hasattr(p,"writebasis"): p.writebasis(str(local),"v")
             else: raise AttributeError("Xpress problem exposes neither writeBasis nor writebasis")
     write_native_basis = write_basis
+    def write_solution(self,p,output_path):
+        output_path=Path(output_path)
+        if not str(output_path).endswith(".sol.zip"):
+            raise ValueError(f"Xpress solution output must end in .sol.zip: {output_path}")
+        output_path.parent.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="xpress_solution_") as td:
+            base=Path(td)/output_path.with_suffix("").name
+            p.writeSol(str(base))
+            asc=Path(f"{base}.asc"); hdr=Path(f"{base}.hdr")
+            missing=[path for path in (asc,hdr) if not path.is_file()]
+            if missing: raise RuntimeError(f"Xpress did not create expected solution files: {missing}")
+            with zipfile.ZipFile(output_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.write(asc,arcname=asc.name); archive.write(hdr,arcname=hdr.name)
     def write_exchange_bas(self,p,native_basis,exchange_bas): self.write_basis(p,exchange_bas)
     def get_num_rows(self,p): return int(p.attributes.rows)
     def get_simplex_iterations(self,p):
@@ -175,6 +190,9 @@ class XpressAdapter:
     def get_basic_membership(self,p):
         vars_=list(p.getVariable()); cons=list(p.getConstraint()); row_status,col_status=self._get_basis(p)
         return ({v.name:int(s)==1 for v,s in zip(vars_,col_status)}, {c.name:int(s)==1 for c,s in zip(cons,row_status)})
+
+    def get_model_names(self,p):
+        return [v.name for v in p.getVariable()], [c.name for c in p.getConstraint()]
 
     def _canonical_bound(self,value):
         x=float(value); inf=float(self.xp.infinity)

@@ -167,6 +167,10 @@ class HighsAdapter:
             self.write_native_basis(handle, native)
             self.convert_native_highs_basis_to_bas(handle, native, output_path)
 
+    def write_solution(self, handle, output_path: Path):
+        with materialize_output(output_path, expected_suffix=".sol") as local:
+            self._require_ok(handle.highs.writeSolution(str(local), 0), f"writeSolution({output_path})")
+
     def get_num_rows(self,handle): return int(handle.highs.getNumRow())
     def get_simplex_iterations(self,handle):
         try: return getattr(handle.highs.getInfo(),"simplex_iteration_count",None)
@@ -175,6 +179,9 @@ class HighsAdapter:
     def get_basic_membership(self,handle):
         h=handle.highs; basis=h.getBasis(); col_names,row_names=self._model_names(h); H=self.highspy.HighsBasisStatus
         return ({n:s==H.kBasic for n,s in zip(col_names,basis.col_status)}, {n:s==H.kBasic for n,s in zip(row_names,basis.row_status)})
+
+    def get_model_names(self,handle):
+        return self._model_names(handle.highs)
 
     def _canonical_bound(self,value):
         x=float(value); inf=float(getattr(self.highspy,"kHighsInf",math.inf))

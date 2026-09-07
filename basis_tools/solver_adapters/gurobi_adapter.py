@@ -149,6 +149,10 @@ class GurobiAdapter:
 
     write_native_basis = write_basis
 
+    def write_solution(self, model, output_path: Path):
+        with materialize_output(output_path, expected_suffix=".sol") as local:
+            model.write(str(local))
+
     def write_exchange_bas(self, model, native_basis, exchange_bas):
         self.write_basis(model, exchange_bas)
 
@@ -161,6 +165,9 @@ class GurobiAdapter:
             {v.VarName: int(v.VBasis) == 0 for v in model.getVars()},
             {c.ConstrName: int(c.CBasis) == 0 for c in model.getConstrs()},
         )
+
+    def get_model_names(self, model):
+        return [v.VarName for v in model.getVars()], [c.ConstrName for c in model.getConstrs()]
 
     def _canonical_bound(self, value):
         x = float(value); inf = float(self.GRB.INFINITY)
