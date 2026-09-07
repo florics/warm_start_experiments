@@ -183,6 +183,50 @@ class HighsAdapter:
     def get_model_names(self,handle):
         return self._model_names(handle.highs)
 
+    def probe_initial_dual_feasibility(self, handle):
+        """Evaluate a loaded basis with no simplex pivots in original space.
+
+        The caller must reload its BAS after this probe because ``run`` can
+        alter HiGHS' internal basis state even with a zero iteration limit.
+        """
+        h = handle.highs
+
+        def option_value(name):
+            value = h.getOptionValue(name)
+            return value[1] if isinstance(value, tuple) else value
+
+        old_presolve = option_value("presolve")
+        old_limit = option_value("simplex_iteration_limit")
+        try:
+            h.setOptionValue("presolve", "off")
+            h.setOptionValue("simplex_iteration_limit", 0)
+            status = h.run()
+            # HiGHS reports kWarning when the deliberately imposed zero
+            # iteration limit is reached. The current basis information is
+            # still available and is exactly what this probe needs.
+            if status not in {self.highspy.HighsStatus.kOk, self.highspy.HighsStatus.kWarning}:
+                raise RuntimeError(f"HiGHS zero-iteration dual-feasibility probe failed with status {status}")
+            info = h.getInfo()
+            num = getattr(info, "num_dual_infeasibilities", None)
+            maximum = getattr(info, "max_dual_infeasibility", None)
+            total = getattr(info, "sum_dual_infeasibilities", None)
+            result = {
+                "status": "CONFIRMED" if num == 0 else "NOT_DUAL_FEASIBLE" if isinstance(num, int) and num > 0 else "NOT_REPORTED",
+                "probe": "HiGHS zero-iteration dual-simplex with presolve=off",
+                "initial_dual_infeasibilities": num,
+                "initial_max_dual_infeasibility": maximum,
+                "initial_sum_dual_infeasibilities": total,
+                "dual_feasible": num == 0 if num is not None else None,
+                "run_status": str(status),
+                "model_status": str(h.getModelStatus()),
+                "dual_solution_status": getattr(info, "dual_solution_status", None),
+                "basis_validity": getattr(info, "basis_validity", None),
+            }
+            return result
+        finally:
+            h.setOptionValue("presolve", old_presolve)
+            h.setOptionValue("simplex_iteration_limit", old_limit)
+
     def _canonical_bound(self,value):
         x=float(value); inf=float(getattr(self.highspy,"kHighsInf",math.inf))
         if math.isfinite(inf):
