@@ -150,6 +150,68 @@ def write_mps_bas(path, col_names, row_names, col_status, row_status, *, problem
         f.write("ENDATA\n")
 
 
+def rename_basis_vectors(
+    basis: BasisVectors,
+    column_name_map: dict[str, str],
+    row_name_map: dict[str, str],
+) -> BasisVectors:
+    """Rename a complete basis while retaining its statuses exactly."""
+    missing_columns = [name for name in basis.col_names if name not in column_name_map]
+    missing_rows = [name for name in basis.row_names if name not in row_name_map]
+    if missing_columns or missing_rows:
+        raise BasisFileError(
+            "Basis name mapping is incomplete: "
+            f"columns={missing_columns[:3]}, rows={missing_rows[:3]}"
+        )
+    new_columns = [column_name_map[name] for name in basis.col_names]
+    new_rows = [row_name_map[name] for name in basis.row_names]
+    _check_unique(new_columns, "renamed column")
+    _check_unique(new_rows, "renamed row")
+    _validate_simplex_cardinality(basis.col_status, basis.row_status)
+    return BasisVectors(new_columns, new_rows, list(basis.col_status), list(basis.row_status))
+
+
+def combine_basis_vectors(
+    first: BasisVectors,
+    second: BasisVectors,
+    additional_basic_rows: Sequence[str],
+) -> BasisVectors:
+    """Block-combine two bases and make every new coupling row BASIC."""
+    col_names = [*first.col_names, *second.col_names]
+    row_names = [*first.row_names, *second.row_names, *additional_basic_rows]
+    _check_unique(col_names, "combined column")
+    _check_unique(row_names, "combined row")
+    col_status = [*first.col_status, *second.col_status]
+    row_status = [*first.row_status, *second.row_status, *([BASIC] * len(additional_basic_rows))]
+    _validate_simplex_cardinality(col_status, row_status)
+    return BasisVectors(col_names, row_names, col_status, row_status)
+
+
+def reorder_basis_vectors(
+    basis: BasisVectors,
+    column_names: Sequence[str],
+    row_names: Sequence[str],
+) -> BasisVectors:
+    """Reorder name-based statuses to the order used by a target model."""
+    target_columns, target_rows = list(column_names), list(row_names)
+    _check_unique(target_columns, "target column")
+    _check_unique(target_rows, "target row")
+    if set(basis.col_names) != set(target_columns):
+        raise BasisFileError("Basis columns do not have the same names as the target model")
+    if set(basis.row_names) != set(target_rows):
+        raise BasisFileError("Basis rows do not have the same names as the target model")
+    column_status = dict(zip(basis.col_names, basis.col_status))
+    row_status = dict(zip(basis.row_names, basis.row_status))
+    ordered = BasisVectors(
+        target_columns,
+        target_rows,
+        [column_status[name] for name in target_columns],
+        [row_status[name] for name in target_rows],
+    )
+    _validate_simplex_cardinality(ordered.col_status, ordered.row_status)
+    return ordered
+
+
 def read_highs_basis_file(path) -> BasisVectors:
     with open_text_read(path) as f:
         lines = [line.rstrip("\n") for line in f]
