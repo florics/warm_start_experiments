@@ -2,17 +2,17 @@
 
 #SBATCH --job-name=mthesis_scencat_warmstarts
 #output paths have to adjusted to your folders
-#SBATCH --output=/scratch/htc/lmehl/master_thesis/warm_start_experiments/results/tests/scenario_catalogue_warmstart/job_out/sbatch_job_%A.out
-#SBATCH --error=/scratch/htc/lmehl/master_thesis/warm_start_experiments/results/tests/scenario_catalogue_warmstart/job_out/sbatch_job_%A.err
+#SBATCH --output=/scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/results/job_out/sbatch_job_%A.out
+#SBATCH --error=/scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/results/job_out/sbatch_job_%A.err
 #SBATCH --partition=big
 #SBATCH --time=10:00:00
 #SBATCH --mem=10G
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=1
 #SBATCH --hint=nomultithread
 #SBATCH --cpu-freq=medium-medium:Performance
+#SBATCH --nodelist=htc-cmp132
 #SBATCH --constraint=Gold6338
 #SBATCH --exclude=htc-gpu[001-115],htc-cmp[101-102],htc-cmp104,htc-cmp126,htc-cmp[145-148]
-#SBATCH --nodelist=htc-cmp132
 
 #for usage at z1 cluster set http and https proxy environment variables
 export https_proxy=http://squid.zib.de:3128
@@ -99,10 +99,4 @@ echo "------ (end of hardware info) ------"
 source ~/conda_init
 
 # todo...
-python /scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/warmstart_batch.py \
-    copt \
-    /scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/csvs-for-arguments/debug/debug_instances.csv \
-    1 \
-    /scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/dualsmplx_1Thrd.par \
-    /scratch/htc/lmehl/master_thesis/warm_start_experiments/results/tests/scenario_catalogue_warmstart \
-    --experiments-csv /scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/csvs-for-arguments/debug/debug_experiments.csv
+python /scratch/htc/lmehl/master_thesis/warm_start_experiments/scenario_catalogue_warmstart/warmstart_batch.py "$@"
