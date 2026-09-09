@@ -183,6 +183,22 @@ class HighsAdapter:
     def get_model_names(self,handle):
         return self._model_names(handle.highs)
 
+    def remove_rows(self,handle,row_names):
+        _, rows=self._model_names(handle.highs); positions={name:index for index,name in enumerate(rows)}; missing=[name for name in row_names if name not in positions]
+        if missing: raise ValueError(f"HiGHS rows not found: {missing[:3]}")
+        self._require_ok(handle.highs.deleteRows(len(row_names),[positions[name] for name in row_names]),"deleteRows")
+
+    def add_equality_row(self,handle,first_index,second_index,name):
+        self._require_ok(handle.highs.addRow(0.0,0.0,2,[first_index,second_index],[1.0,-1.0]),"addRow")
+        # HiGHS assigns no row name through addRow, so name the appended row.
+        self._require_ok(handle.highs.passRowName(handle.highs.getNumRow()-1,name),"passRowName")
+
+    def get_column_values_and_basic(self,handle):
+        solution=handle.highs.getSolution(); basis=handle.highs.getBasis(); basic=self.highspy.HighsBasisStatus.kBasic
+        return [float(value) for value in solution.col_value], [status==basic for status in basis.col_status]
+
+    def get_feasibility_tolerance(self,handle): return float(self._get_option(handle.highs,"primal_feasibility_tolerance"))
+
     def probe_initial_dual_feasibility(self, handle):
         """Evaluate a loaded basis with no simplex pivots in original space.
 

@@ -194,6 +194,20 @@ class XpressAdapter:
     def get_model_names(self,p):
         return [v.name for v in p.getVariable()], [c.name for c in p.getConstraint()]
 
+    def remove_rows(self,p,row_names):
+        rows={c.name:c for c in p.getConstraint()}; missing=[name for name in row_names if name not in rows]
+        if missing: raise ValueError(f"Xpress rows not found: {missing[:3]}")
+        p.delConstraint([rows[name] for name in row_names])
+
+    def add_equality_row(self,p,first_index,second_index,name):
+        variables=p.getVariable(); p.addConstraint(self.xp.constraint(variables[first_index]-variables[second_index] == 0.0, name=name))
+
+    def get_column_values_and_basic(self,p):
+        _, column_status=self._get_basis(p)
+        return [float(value) for value in p.getSolution()], [int(status)==1 for status in column_status]
+
+    def get_feasibility_tolerance(self,p): return float(p.controls.feastol)
+
     def _canonical_bound(self,value):
         x=float(value); inf=float(self.xp.infinity)
         if x<=-inf: return -math.inf

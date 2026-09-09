@@ -169,6 +169,22 @@ class GurobiAdapter:
     def get_model_names(self, model):
         return [v.VarName for v in model.getVars()], [c.ConstrName for c in model.getConstrs()]
 
+    def remove_rows(self, model, row_names):
+        rows = {c.ConstrName: c for c in model.getConstrs()}
+        missing = [name for name in row_names if name not in rows]
+        if missing: raise ValueError(f"Gurobi rows not found: {missing[:3]}")
+        model.remove([rows[name] for name in row_names]); model.update()
+
+    def add_equality_row(self, model, first_index, second_index, name):
+        variables = model.getVars()
+        model.addConstr(variables[first_index] - variables[second_index] == 0.0, name=name); model.update()
+
+    def get_column_values_and_basic(self, model):
+        variables = model.getVars()
+        return [float(v.X) for v in variables], [int(v.VBasis) == 0 for v in variables]
+
+    def get_feasibility_tolerance(self, model): return float(model.Params.FeasibilityTol)
+
     def _canonical_bound(self, value):
         x = float(value); inf = float(self.GRB.INFINITY)
         if x <= -inf: return -math.inf

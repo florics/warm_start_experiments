@@ -136,6 +136,19 @@ class CoptAdapter:
             except Exception: return entity.name
         return [name(v) for v in h.model.getVars()], [name(c) for c in h.model.getConstrs()]
 
+    def remove_rows(self,h,row_names):
+        rows={c.name:c for c in h.model.getConstrs()}; missing=[name for name in row_names if name not in rows]
+        if missing: raise ValueError(f"COPT rows not found: {missing[:3]}")
+        h.model.remove([rows[name] for name in row_names])
+
+    def add_equality_row(self,h,first_index,second_index,name):
+        variables=h.model.getVars(); h.model.addConstr(variables[first_index]-variables[second_index] == 0.0,name=name)
+
+    def get_column_values_and_basic(self,h):
+        return [float(value) for value in h.model.getValues()], [status==self.COPT.BASIS_BASIC for status in h.model.getVarBasis()]
+
+    def get_feasibility_tolerance(self,h): return float(h.model.getParam(self.COPT.Param.FeasTol))
+
     def _canonical_bound(self,value):
         x=float(value); inf=float(self.COPT.INFINITY)
         if x<=-inf: return -math.inf
