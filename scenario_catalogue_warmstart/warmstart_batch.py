@@ -165,7 +165,7 @@ def write_experiment_info(path,adapter,args,data_csv,experiments_csv,copied_para
         f.write("Dual-simplex warm-start batch experiment\n"+"="*80+"\n\n")
         f.write(f"Created: {datetime.now().isoformat()}\nSolver key: {adapter.name}\nSolver: {version.get('solver')}\nSolver version: {version.get('solver_version')}\nPython API: {version.get('python_api')}\nPython API version: {version.get('python_api_version')}\nPython executable: {sys.executable}\nPython version: {sys.version}\nHostname: {socket.gethostname()}\nPlatform: {platform.platform()}\n")
         f.write("\nInput and experiment selection\n"+"-"*80+"\n")
-        f.write(f"Data CSV: {data_csv}\nExperiments CSV: {experiments_csv if experiments_csv else 'not used'}\nSelection mode: {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nRepetitions: {args.repetitions}\nDatasets: {len(datasets)}\nSelected experiments: {len(experiments)}\nPlanned solves: {len(experiments)*args.repetitions}\nCopied parameters: {copied_param}\nEffective parameters: {effective_param}\nValidated settings: {validated}\nEBF bound tolerance: {args.bound_tolerance}\nCompressed output artifacts: {args.compress_output}\nPer-trial measurement: /usr/bin/time -v perf stat -e cycles,instructions,task-clock,cpu-clock\nMeasurement output: standard error redirected to standard output (the batch/SLURM .out log)\n")
+        f.write(f"Data CSV: {data_csv}\nExperiments CSV: {experiments_csv if experiments_csv else 'not used'}\nSelection mode: {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nRepetitions: {args.repetitions}\nDatasets: {len(datasets)}\nSelected experiments: {len(experiments)}\nPlanned solves: {len(experiments)*args.repetitions}\nCopied parameters: {copied_param}\nEffective parameters: {effective_param}\nValidated settings: {validated}\nWrite post-solve artifacts: {args.write_artifacts}\nEBF bound tolerance: {args.bound_tolerance}\nCompressed output artifacts: {args.compress_output}\nPer-trial measurement: /usr/bin/time -v perf stat -e cycles,instructions,task-clock,cpu-clock\nMeasurement output: standard error redirected to standard output (the batch/SLURM .out log)\n")
         f.write("\nEBF\n"+"-"*80+"\n")
         f.write(f"Format: {fmt['name']} ({fmt['abbreviation']}) {fmt['version']}\nImplementation module: basis_tools.ebf\nVariable columns: var_name,basis_status,bound_status,value\nConstraint columns: constr_name,basis_status,bound_status,activity\nbasis_status: BASIC, NONBASIC, SUPERBASIC\nbound_status: LOWER, UPPER, FIXED, INTERIOR, FREE\n")
         f.write("Constraint bound_status is derived from row activity and row bounds, not native row/slack status.\n")
@@ -183,7 +183,7 @@ def blank_result(adapter,target,source,repetition,param_file,log_file):
     return {"timestamp":timestamp_now(),"solver":adapter.name,"repetition":repetition,"problem_name":target["name"],"lp_file":str(target["lp_file"]),"warmstart_source_name":source["name"],"warmstart_basis_description":source["basis_description"],"warmstart_basis_file":str(source["basis_file"]),"parameter_file":str(param_file),"log_file":str(log_file),"optimal_basis_file":"","ebf_vars_csv":"","ebf_constrs_csv":"","solver_status":"ERROR","status_code":"","objective_value":"","solve_time_s":"","external_wallclock_s":"","simplex_iterations":"","work_units":"","message":"","is_optimal":False}
 
 
-def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,run_index,total_runs,experiment_index,total_experiments,total_repetitions):
+def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,write_artifacts,run_index,total_runs,experiment_index,total_experiments,total_repetitions):
     stamp=timestamp_now(); prefix=f"{sanitize_filename(target['name'])}__warm_from__{sanitize_filename(source['name'])}__rep_{repetition:03d}__{stamp}"
     log_file=Path(log_dir)/f"{prefix}.{adapter.name}.log"; row=blank_result(adapter,target,source,repetition,param_file,log_file); model=None
     print("\n"+"="*100); print(f"RUN {run_index} / {total_runs}\nEXPERIMENT {experiment_index} / {total_experiments}"); print("="*100)
@@ -201,7 +201,7 @@ def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basi
         start=time.perf_counter(); adapter.optimize(model); wall=time.perf_counter()-start
         result=adapter.collect_result(model,wall); adapter.print_postsolve_information(model,wall); sys.stdout.flush()
         row.update({"solver_status":result.get("status",""),"status_code":result.get("status_code",""),"objective_value":result.get("objective_value",""),"solve_time_s":result.get("solve_time_s",""),"external_wallclock_s":result.get("external_wallclock_s",wall),"simplex_iterations":result.get("simplex_iterations",""),"work_units":result.get("work_units","")}); row["is_optimal"]=bool(result.get("is_optimal",False))
-        if repetition==1 and row["is_optimal"]:
+        if write_artifacts and repetition==1 and row["is_optimal"]:
             if not adapter.has_basis(model): row["message"]=append_message(row["message"],"Optimal solve produced no valid basis; basis/EBF output skipped")
             else:
                 out_basis=output_path(Path(basis_dir)/f"{sanitize_filename(target['name'])}__warm_from__{sanitize_filename(source['name'])}.bas",compress=compress_output)
@@ -226,7 +226,7 @@ def dataset_from_worker_config(data):
 def run_worker(config_path):
     with Path(config_path).open("r",encoding="utf-8") as f: config=json.load(f)
     adapter=get_solver_adapter(config["solver"])
-    row=solve_one_warmstart(adapter,dataset_from_worker_config(config["target"]),dataset_from_worker_config(config["source"]),config["repetition"],Path(config["param_file"]),Path(config["log_dir"]),Path(config["basis_dir"]),Path(config["ebf_dir"]),config["bound_tolerance"],config["compress_output"],config["run_index"],config["total_runs"],config["experiment_index"],config["total_experiments"],config["total_repetitions"])
+    row=solve_one_warmstart(adapter,dataset_from_worker_config(config["target"]),dataset_from_worker_config(config["source"]),config["repetition"],Path(config["param_file"]),Path(config["log_dir"]),Path(config["basis_dir"]),Path(config["ebf_dir"]),config["bound_tolerance"],config["compress_output"],config["write_artifacts"],config["run_index"],config["total_runs"],config["experiment_index"],config["total_experiments"],config["total_repetitions"])
     with Path(config["result_path"]).open("w",encoding="utf-8") as f: json.dump(row,f,default=str)
     return 0
 
@@ -234,7 +234,7 @@ def run_worker(config_path):
 def run_measured_trial(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,run_index,total_runs,experiment_index,total_experiments,total_repetitions,worker_dir):
     prefix=f"{sanitize_filename(target['name'])}__warm_from__{sanitize_filename(source['name'])}__rep_{repetition:03d}__{timestamp_now()}"
     config_path=Path(worker_dir)/f"{prefix}.json"; result_path=Path(worker_dir)/f"{prefix}.result.json"
-    config={"solver":adapter.name,"target":{k:str(v) if isinstance(v,Path) else v for k,v in target.items()},"source":{k:str(v) if isinstance(v,Path) else v for k,v in source.items()},"repetition":repetition,"param_file":str(param_file),"log_dir":str(log_dir),"basis_dir":str(basis_dir),"ebf_dir":str(ebf_dir),"bound_tolerance":bound_tolerance,"compress_output":compress_output,"run_index":run_index,"total_runs":total_runs,"experiment_index":experiment_index,"total_experiments":total_experiments,"total_repetitions":total_repetitions,"result_path":str(result_path)}
+    config={"solver":adapter.name,"target":{k:str(v) if isinstance(v,Path) else v for k,v in target.items()},"source":{k:str(v) if isinstance(v,Path) else v for k,v in source.items()},"repetition":repetition,"param_file":str(param_file),"log_dir":str(log_dir),"basis_dir":str(basis_dir),"ebf_dir":str(ebf_dir),"bound_tolerance":bound_tolerance,"compress_output":compress_output,"write_artifacts":write_artifacts,"run_index":run_index,"total_runs":total_runs,"experiment_index":experiment_index,"total_experiments":total_experiments,"total_repetitions":total_repetitions,"result_path":str(result_path)}
     with config_path.open("w",encoding="utf-8") as f: json.dump(config,f)
     command=["/usr/bin/time","-v","perf","stat","-e","cycles,instructions,task-clock,cpu-clock","--",sys.executable,str(Path(__file__).resolve()),"--worker-config",str(config_path)]
     print("Measuring complete trial with: "+" ".join(command)); sys.stdout.flush()
@@ -258,6 +258,7 @@ def parse_arguments():
     p.add_argument("solver",choices=["gurobi","copt","highs","xpress"]); p.add_argument("data_csv",help="CSV: name,lp_file,basis_file,basis_description"); p.add_argument("repetitions",type=int); p.add_argument("param_file"); p.add_argument("results_dir")
     p.add_argument("--bound-tolerance",type=float,default=1e-9,help="Tolerance for EBF bound_status classification")
     p.add_argument("--compress-output",action=argparse.BooleanOptionalAction,default=True,help="Compress generated BAS/EBF files with gzip (default: enabled).")
+    p.add_argument("--write-artifacts",action=argparse.BooleanOptionalAction,default=False,help="Write post-solve basis and EBF artifacts (default: disabled).")
     group=p.add_mutually_exclusive_group(required=True); group.add_argument("--experiments-csv"); group.add_argument("--all-experiments",action="store_true")
     return p.parse_args()
 
@@ -282,7 +283,7 @@ def main():
     try:
         sys.stdout.flush()
         experiment_dir=create_unique_experiment_dir(results_dir)
-        print("\n"+"="*80+"\nEXPERIMENT PLAN\n"+"="*80); print(f"Solver                     : {adapter.name}\nOutput folder              : {experiment_dir}\nDatasets                   : {len(datasets)}\nSelection mode             : {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nSelected experiments       : {len(experiments)}\nRepetitions per experiment : {args.repetitions}\nTotal optimization runs    : {total_runs}\nValidated solver settings  : {validated}\nEBF bound tolerance        : {args.bound_tolerance}\nCompress output            : {args.compress_output}")
+        print("\n"+"="*80+"\nEXPERIMENT PLAN\n"+"="*80); print(f"Solver                     : {adapter.name}\nOutput folder              : {experiment_dir}\nDatasets                   : {len(datasets)}\nSelection mode             : {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nSelected experiments       : {len(experiments)}\nRepetitions per experiment : {args.repetitions}\nTotal optimization runs    : {total_runs}\nValidated solver settings  : {validated}\nWrite post-solve artifacts : {args.write_artifacts}\nEBF bound tolerance        : {args.bound_tolerance}\nCompress output            : {args.compress_output}")
         print("\nSelected experiments:")
         for i,(a,b) in enumerate(experiments,1): print(f"  [{i}] {a['name']} <- basis from {b['name']}")
         log_dir=experiment_dir/"logs"; basis_dir=experiment_dir/"optimal_bases"; ebf_dir=experiment_dir/"ebf_bases"; worker_dir=experiment_dir/"workers"
@@ -298,7 +299,7 @@ def main():
         for exp_index,(target,source) in enumerate(experiments,1):
             for repetition in range(1,args.repetitions+1):
                 run_index+=1
-                row=run_measured_trial(adapter,target,source,repetition,copied_param,log_dir,basis_dir,ebf_dir,args.bound_tolerance,args.compress_output,run_index,total_runs,exp_index,len(experiments),args.repetitions,worker_dir)
+                row=run_measured_trial(adapter,target,source,repetition,copied_param,log_dir,basis_dir,ebf_dir,args.bound_tolerance,args.compress_output,args.write_artifacts,run_index,total_runs,exp_index,len(experiments),args.repetitions,worker_dir)
                 append_csv_row(detailed,DETAILED_SUMMARY_COLUMNS,row); append_csv_row(short,SHORT_SUMMARY_COLUMNS,row)
                 if row["is_optimal"]: succeeded_runs+=1
                 else: failed_runs+=1

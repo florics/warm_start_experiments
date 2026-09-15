@@ -201,7 +201,7 @@ def run_worker(config_path: Path) -> int:
             initial_probe or initial_dual_feasibility_from_log(config["solver"], Path(config["solver_log"]))
             if config["check_initial_dual_feasibility"] else {"status": "DISABLED"}
         )
-        if result["is_optimal"]:
+        if config["write_artifacts"] and result["is_optimal"]:
             print("[PHASE] OPTIMAL_ARTIFACTS: writing only if this is the first optimal repetition.", flush=True)
             result.update(write_optimal_artifacts(adapter, model, Path(config["output_dir"]), config["solver"]))
     except Exception as error:
@@ -258,6 +258,7 @@ def main() -> int:
     parser.add_argument("--solve", action="store_true")
     parser.add_argument("--repetitions", type=int, default=1, help="number of fresh integrated warm-start solves")
     parser.add_argument("--measure", action=argparse.BooleanOptionalAction, default=True, help="measure each repetition with /usr/bin/time -v and perf stat")
+    parser.add_argument("--write-artifacts", action=argparse.BooleanOptionalAction, default=False, help="write post-solve optimal basis, EBF, and solution artifacts")
     parser.add_argument("--check-initial-dual-feasibility", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
     apply_input_csv(args, parser)
@@ -279,6 +280,7 @@ def main() -> int:
         "output_dir": str(output_dir),
         "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios],
         "reference_scenario": reference_scenario,
+        "write_artifacts": args.write_artifacts,
         "integrated_lp": str(args.integrated_lp),
         "warmstart_basis_file": str(output_bas),
     }
@@ -340,6 +342,7 @@ def main() -> int:
                     "warmstart_basis_file": str(output_bas),
                     "coupling_rows": coupling_rows,
                     "check_initial_dual_feasibility": args.check_initial_dual_feasibility,
+                    "write_artifacts": args.write_artifacts,
                     "solver_log": str(solver_log),
                     "output_dir": str(output_dir),
                 }
