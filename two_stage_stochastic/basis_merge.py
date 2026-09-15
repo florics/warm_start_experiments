@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Sequence
 
 from basis_tools.mps_bas import (
+    BASIC,
     BasisFileError,
     BasisVectors,
-    combine_basis_vectors,
     parse_mps_bas,
     rename_basis_vectors,
     write_mps_bas,
@@ -21,7 +21,7 @@ PAREN_IDENTIFIER_RE = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_.]*)\((?P<key>[^()\r\n]+)\)(?P<tail>_?)\Z"
 )
 BARE_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*\Z")
-SCENARIO_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+SCENARIO_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*\Z")
 
 
 class TwoStageBasisError(ValueError):
@@ -45,6 +45,20 @@ def nonanticipativity_row_name(variable_name: str, first_scenario: str, second_s
     return f"c_e_nonanticipativity_({variable_name}_{first_scenario}_{second_scenario})_"
 
 
+def nonanticipativity_row_names(investment_variables: Sequence[str], scenarios: Sequence[str], reference_scenario: str | None = None) -> list[str]:
+    if len(scenarios) < 2:
+        raise TwoStageBasisError("At least two scenarios are required")
+    reference = reference_scenario or scenarios[0]
+    if reference not in scenarios:
+        raise TwoStageBasisError(f"Reference scenario is not an input scenario: {reference!r}")
+    return [
+        nonanticipativity_row_name(variable, reference, scenario)
+        for variable in investment_variables
+        for scenario in scenarios
+        if scenario != reference
+    ]
+
+
 def _name_map(names: Sequence[str], scenario: str) -> dict[str, str]:
     mapped = {name: scenario_indexed_name(name, scenario) for name in names}
     if len(set(mapped.values())) != len(mapped):
@@ -52,30 +66,27 @@ def _name_map(names: Sequence[str], scenario: str) -> dict[str, str]:
     return mapped
 
 
-def build_combined_basis(
-    first_basis_path: Path,
-    second_basis_path: Path,
-    first_column_names: Sequence[str],
-    first_row_names: Sequence[str],
-    second_column_names: Sequence[str],
-    second_row_names: Sequence[str],
-    investment_variables: Sequence[str],
-    first_scenario: str,
-    second_scenario: str,
-) -> BasisVectors:
-    """Parse, rename, and block-combine scenario bases with BASIC coupling rows."""
+def build_combined_basis(scenarios: Sequence[tuple[str, Path, Sequence[str], Sequence[str]]], investment_variables: Sequence[str], reference_scenario: str | None = None) -> BasisVectors:
+    """Parse and combine scenario bases with BASIC reference-star coupling rows."""
     try:
-        first = parse_mps_bas(first_basis_path, first_column_names, first_row_names)
-        second = parse_mps_bas(second_basis_path, second_column_names, second_row_names)
-        first = rename_basis_vectors(first, _name_map(first_column_names, first_scenario), _name_map(first_row_names, first_scenario))
-        second = rename_basis_vectors(second, _name_map(second_column_names, second_scenario), _name_map(second_row_names, second_scenario))
-        coupling_rows = [
-            nonanticipativity_row_name(variable, first_scenario, second_scenario)
-            for variable in investment_variables
-        ]
+        if len(scenarios) < 2:
+            raise TwoStageBasisError("At least two scenarios are required")
+        names = [name for name, _path, _columns, _rows in scenarios]
+        if len(set(names)) != len(names):
+            raise TwoStageBasisError("Scenario identifiers must be unique")
+        bases = []
+        for scenario, basis_path, columns, rows in scenarios:
+            basis = parse_mps_bas(basis_path, columns, rows)
+            bases.append(rename_basis_vectors(basis, _name_map(columns, scenario), _name_map(rows, scenario)))
+        coupling_rows = nonanticipativity_row_names(investment_variables, names, reference_scenario)
         if len(set(coupling_rows)) != len(coupling_rows):
             raise TwoStageBasisError("Duplicate non-anticipativity row names")
-        return combine_basis_vectors(first, second, coupling_rows)
+        return BasisVectors(
+            [name for basis in bases for name in basis.col_names],
+            [name for basis in bases for name in basis.row_names] + coupling_rows,
+            [status for basis in bases for status in basis.col_status],
+            [status for basis in bases for status in basis.row_status] + [BASIC] * len(coupling_rows),
+        )
     except BasisFileError as error:
         raise TwoStageBasisError(str(error)) from error
 
