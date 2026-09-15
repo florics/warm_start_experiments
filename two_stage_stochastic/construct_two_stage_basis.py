@@ -31,7 +31,7 @@ from basis_tools.solver_adapters import SUPPORTED_SOLVERS, get_solver_adapter
 from two_stage_stochastic.basis_merge import (
     TwoStageBasisError,
     build_combined_basis,
-    nonanticipativity_row_name,
+    nonanticipativity_row_names,
 )
 from two_stage_stochastic.input_csv import apply_input_csv
 
@@ -247,10 +247,13 @@ def main() -> int:
     parser.add_argument("second_bas", type=Path, nargs="?")
     parser.add_argument("integrated_lp", type=Path, nargs="?")
     parser.add_argument("--input-csv", type=Path, help="one-row CSV supplying LPs, bases, and scenario names")
+    parser.add_argument("--scenario", action="append", nargs=3, metavar=("NAME", "LP", "BAS"), help="scenario identifier, source LP, and source BAS; repeat for each scenario")
+    parser.add_argument("--integrated-lp", dest="integrated_lp_option", type=Path, help="integrated LP used with repeated --scenario")
     parser.add_argument("--output-parent", type=Path, required=True, help="parent directory for the timestamped run directory")
     parser.add_argument("--run-label", help="optional descriptive suffix for the timestamped run directory")
     parser.add_argument("--scenario-a")
     parser.add_argument("--scenario-b")
+    parser.add_argument("--reference-scenario", help="scenario used on the +1 side of coupling rows (default: first scenario)")
     parser.add_argument("--parameter-file", type=Path)
     parser.add_argument("--solve", action="store_true")
     parser.add_argument("--repetitions", type=int, default=1, help="number of fresh integrated warm-start solves")
@@ -264,7 +267,9 @@ def main() -> int:
         parser.error("--repetitions must be at least 1")
 
     adapter = get_solver_adapter(args.solver)
-    first_model = second_model = integrated_model = None
+    source_models = []
+    integrated_model = None
+    reference_scenario = args.reference_scenario or args.scenarios[0][0]
     output_dir = create_run_directory(args.output_parent, args.integrated_lp, args.solver, args.run_label)
     output_bas = output_dir / "integrated_warmstart.bas.gz"
     report_path = output_dir / "integrated_warmstart_report.json"
@@ -272,25 +277,30 @@ def main() -> int:
         "solver": args.solver,
         "status": "ERROR",
         "output_dir": str(output_dir),
-        "first_lp": str(args.first_lp),
-        "second_lp": str(args.second_lp),
+        "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios],
+        "reference_scenario": reference_scenario,
         "integrated_lp": str(args.integrated_lp),
         "warmstart_basis_file": str(output_bas),
     }
+    if len(args.scenarios) == 2:
+        report.update({"first_lp": str(args.scenarios[0][1]), "second_lp": str(args.scenarios[1][1])})
     try:
-        print(f"[INPUT] First scenario LP: {args.first_lp}", flush=True)
-        print(f"[INPUT] Second scenario LP: {args.second_lp}", flush=True)
+        for name, lp, _bas in args.scenarios:
+            print(f"[INPUT] Scenario {name} LP: {lp}", flush=True)
         print(f"[INPUT] Integrated two-stage LP: {args.integrated_lp}", flush=True)
-        first_model = adapter.load_model(args.first_lp)
-        second_model = adapter.load_model(args.second_lp)
-        first_columns, first_rows = adapter.get_model_names(first_model)
-        second_columns, second_rows = adapter.get_model_names(second_model)
-        require_same_structure(first_columns, first_rows, second_columns, second_rows)
-        investments = investment_variables(first_columns)
-        combined = build_combined_basis(
-            args.first_bas, args.second_bas, first_columns, first_rows,
-            second_columns, second_rows, investments, args.scenario_a, args.scenario_b,
-        )
+        source_descriptors = []
+        canonical_columns = canonical_rows = None
+        for name, lp, bas in args.scenarios:
+            model = adapter.load_model(lp)
+            source_models.append(model)
+            columns, rows = adapter.get_model_names(model)
+            if canonical_columns is None:
+                canonical_columns, canonical_rows = columns, rows
+            else:
+                require_same_structure(canonical_columns, canonical_rows, columns, rows)
+            source_descriptors.append((name, bas, columns, rows))
+        investments = investment_variables(canonical_columns)
+        combined = build_combined_basis(source_descriptors, investments, reference_scenario)
         integrated_model = adapter.load_model(args.integrated_lp)
         integrated_columns, integrated_rows = adapter.get_model_names(integrated_model)
         try:
@@ -299,7 +309,7 @@ def main() -> int:
             raise TwoStageBasisError(
                 "Combined BAS names do not match the integrated LP: " + str(error)
             ) from error
-        coupling_rows = [nonanticipativity_row_name(name, args.scenario_a, args.scenario_b) for name in investments]
+        coupling_rows = nonanticipativity_row_names(investments, [name for name, _lp, _bas in args.scenarios], reference_scenario)
         write_mps_bas(output_bas, combined.col_names, combined.row_names, combined.col_status, combined.row_status, problem_name="TWOSTAGE")
         parsed = parse_mps_bas(output_bas, integrated_columns, integrated_rows)
         row_status = dict(zip(parsed.row_names, parsed.row_status))
@@ -309,9 +319,10 @@ def main() -> int:
         if args.solve:
             # Workers own fresh solver processes, so release the models used to
             # inspect names and build the shared warm-start BAS first.
-            for model in (integrated_model, second_model, first_model):
+            for model in (integrated_model, *source_models):
                 adapter.dispose(model)
-            integrated_model = second_model = first_model = None
+            integrated_model = None
+            source_models = []
             worker_dir = output_dir / "workers"
             worker_dir.mkdir()
             repetition_results = []
@@ -363,7 +374,7 @@ def main() -> int:
         return 2
     finally:
         report_path.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
-        for model in (integrated_model, second_model, first_model):
+        for model in (integrated_model, *source_models):
             if model is not None:
                 adapter.dispose(model)
 

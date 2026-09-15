@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from two_stage_stochastic.input_csv import INPUT_COLUMNS, read_input_csv
+from two_stage_stochastic.input_csv import INPUT_COLUMNS, MULTI_INPUT_COLUMNS, read_input_csv, read_multi_input_csv
 
 
 class InputCsvTests(unittest.TestCase):
@@ -22,6 +22,17 @@ class InputCsvTests(unittest.TestCase):
             path = Path(directory) / "input.csv"; path.write_text(",".join(INPUT_COLUMNS) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 read_input_csv(path)
+
+    def test_reads_multi_scenario_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.csv"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=MULTI_INPUT_COLUMNS); writer.writeheader()
+                for name in ("base", "low", "high"):
+                    writer.writerow({"integrated_lp": "models/integrated.lp.gz", "lp": f"models/{name}.lp", "bas": f"bases/{name}.bas.gz", "scenarioname": name})
+            integrated, scenarios = read_multi_input_csv(path)
+            self.assertEqual(integrated, path.parent / "models/integrated.lp.gz")
+            self.assertEqual([name for name, _lp, _bas in scenarios], ["base", "low", "high"])
 
 
 if __name__ == "__main__": unittest.main()

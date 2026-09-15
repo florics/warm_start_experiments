@@ -43,15 +43,11 @@ class TwoStageBasisMergeTest(unittest.TestCase):
             write_mps_bas(second_bas, columns, rows, [UPPER, BASIC], [BASIC, UPPER])
 
             combined = build_combined_basis(
-                first_bas,
-                second_bas,
-                columns,
-                rows,
-                columns,
-                rows,
+                [
+                    ("base", first_bas, columns, rows),
+                    ("demand_up", second_bas, columns, rows),
+                ],
                 ["InvestmentFlowBlock_capacity(asset_0)"],
-                "base",
-                "demand_up",
             )
 
         self.assertEqual(
@@ -84,6 +80,29 @@ class TwoStageBasisMergeTest(unittest.TestCase):
         )
         self.assertEqual(reordered.col_status[:2], [LOWER, BASIC])
         self.assertEqual(reordered.row_status[:2], [BASIC, LOWER])
+
+    def test_combines_three_bases_with_reference_star_rows(self) -> None:
+        columns = ["InvestmentFlowBlock_capacity(asset_0)"]
+        rows = ["c_e_balance(asset_0)_"]
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            paths = [directory / f"scenario_{index}.bas" for index in range(3)]
+            for path in paths:
+                write_mps_bas(path, columns, rows, [BASIC], [LOWER])
+            combined = build_combined_basis(
+                [(name, path, columns, rows) for name, path in zip(("base", "low", "high"), paths)],
+                columns,
+                "high",
+            )
+
+        self.assertEqual(
+            combined.row_names[-2:],
+            [
+                "c_e_nonanticipativity_(InvestmentFlowBlock_capacity(asset_0)_high_base)_",
+                "c_e_nonanticipativity_(InvestmentFlowBlock_capacity(asset_0)_high_low)_",
+            ],
+        )
+        self.assertEqual(combined.row_status[-2:], [BASIC, BASIC])
 
 
 if __name__ == "__main__":

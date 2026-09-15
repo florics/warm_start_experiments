@@ -1,9 +1,9 @@
 # Two-Stage Stochastic Warm Starts
 
 `construct_two_stage_basis.py` builds a classical MPS BAS file for an
-integrated two-scenario LP. It validates both source BAS files against their
-source LP names, applies the integrated-LP scenario naming convention, and
-makes every generated non-anticipativity row BASIC.
+integrated two-stage LP with two or more scenarios. It validates every source
+BAS file against its source LP names, applies the integrated-LP scenario naming
+convention, and makes every generated non-anticipativity row BASIC.
 
 The command requires source bases generated for the same solver as the target
 solve. The solver adapters handle the existing HiGHS native BAS conversion
@@ -44,6 +44,30 @@ python3 two_stage_stochastic/construct_two_stage_basis.py \
 
 Relative LP and BAS paths resolve from the CSV directory. Explicit
 `--scenario-a` or `--scenario-b` values override the corresponding CSV value.
+
+For more than two scenarios, repeat `--scenario NAME LP BAS` and provide the
+integrated LP separately. The first scenario is the default non-anticipativity
+reference; `--reference-scenario` selects another input scenario. Each
+investment variable receives one row between the reference and every other
+scenario, avoiding redundant all-pairs rows.
+
+```bash
+python3 two_stage_stochastic/construct_two_stage_basis.py \
+  gurobi --integrated-lp integrated.lp.gz --output-parent results/two_stage_debug \
+  --scenario base base.lp.gz base.bas.gz \
+  --scenario electricity1p2 electricity.lp.gz electricity.bas.gz \
+  --scenario heat1p2 heat.lp.gz heat.bas.gz \
+  --reference-scenario base --parameter-file dualsmplx_1Thrd.prm --solve
+```
+
+The equivalent multi-scenario CSV has one row per source scenario:
+
+```csv
+integrated_lp,lp,bas,scenarioname
+integrated.lp.gz,base.lp.gz,base.bas.gz,base
+integrated.lp.gz,electricity.lp.gz,electricity.bas.gz,electricity1p2
+integrated.lp.gz,heat.lp.gz,heat.bas.gz,heat1p2
+```
 
 The constructor creates
 `run_<integrated-instance-stem>_<solver>_<YYYY-MM-DD_HH-MM-SS>[_<label>]`
