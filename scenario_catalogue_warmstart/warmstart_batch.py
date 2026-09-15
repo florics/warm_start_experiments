@@ -231,7 +231,7 @@ def run_worker(config_path):
     return 0
 
 
-def run_measured_trial(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,run_index,total_runs,experiment_index,total_experiments,total_repetitions,worker_dir):
+def run_measured_trial(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,write_artifacts,run_index,total_runs,experiment_index,total_experiments,total_repetitions,worker_dir):
     prefix=f"{sanitize_filename(target['name'])}__warm_from__{sanitize_filename(source['name'])}__rep_{repetition:03d}__{timestamp_now()}"
     config_path=Path(worker_dir)/f"{prefix}.json"; result_path=Path(worker_dir)/f"{prefix}.result.json"
     config={"solver":adapter.name,"target":{k:str(v) if isinstance(v,Path) else v for k,v in target.items()},"source":{k:str(v) if isinstance(v,Path) else v for k,v in source.items()},"repetition":repetition,"param_file":str(param_file),"log_dir":str(log_dir),"basis_dir":str(basis_dir),"ebf_dir":str(ebf_dir),"bound_tolerance":bound_tolerance,"compress_output":compress_output,"write_artifacts":write_artifacts,"run_index":run_index,"total_runs":total_runs,"experiment_index":experiment_index,"total_experiments":total_experiments,"total_repetitions":total_repetitions,"result_path":str(result_path)}
