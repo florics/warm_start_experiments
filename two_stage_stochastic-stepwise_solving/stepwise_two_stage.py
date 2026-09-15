@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from basis_tools.mps_bas import BASIC, BasisVectors, reorder_basis_vectors, write_mps_bas
 from basis_tools.solver_adapters import SUPPORTED_SOLVERS, get_solver_adapter
-from two_stage_stochastic.basis_merge import build_combined_basis, nonanticipativity_row_name, scenario_indexed_name
+from two_stage_stochastic.basis_merge import build_combined_basis, nonanticipativity_row_name, nonanticipativity_row_names, scenario_indexed_name
 from two_stage_stochastic.construct_two_stage_basis import create_run_directory, investment_variables, require_same_structure, write_optimal_artifacts
 from two_stage_stochastic.input_csv import apply_input_csv
 from stepwise_core import Coupling, disagreement, rank_violations, violation_summary
@@ -71,7 +71,16 @@ def solve_worker(config_path: Path) -> int:
         model = adapter.load_model(Path(config["integrated_lp"])); adapter.read_parameters(model, Path(config["parameter_file"])); adapter.validate_loaded_parameters(model)
         adapter.set_log_file(model, Path(config["solver_log"])); adapter.remove_rows(model, config["coupling_rows"]); adapter.read_basis(model, Path(config["uncoupled_basis_file"]))
         tolerance = adapter.get_feasibility_tolerance(model); columns, _ = adapter.get_model_names(model); positions = {name: index for index, name in enumerate(columns)}
-        couplings = [Coupling(row, original, scenario_indexed_name(original, config["scenario_a"]), scenario_indexed_name(original, config["scenario_b"]), positions[scenario_indexed_name(original, config["scenario_a"])], positions[scenario_indexed_name(original, config["scenario_b"])]) for row, original in config["couplings"]]
+        couplings = [
+            Coupling(
+                item["row_name"], item["original_name"],
+                scenario_indexed_name(item["original_name"], item["reference_scenario"]),
+                scenario_indexed_name(item["original_name"], item["scenario"]),
+                positions[scenario_indexed_name(item["original_name"], item["reference_scenario"])],
+                positions[scenario_indexed_name(item["original_name"], item["scenario"])],
+            )
+            for item in config["couplings"]
+        ]
         print(f"[PHASE] STEPWISE {config['repetition']}/{config['total_repetitions']}: solve uncoupled model once.", flush=True)
         start = time.perf_counter(); adapter.optimize(model); initial = adapter.collect_result(model, time.perf_counter() - start)
         if not initial.get("is_optimal"):
@@ -119,18 +128,29 @@ def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--worker-config": return solve_worker(Path(sys.argv[2]))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("solver", choices=SUPPORTED_SOLVERS); parser.add_argument("first_lp", type=Path, nargs="?"); parser.add_argument("first_bas", type=Path, nargs="?"); parser.add_argument("second_lp", type=Path, nargs="?"); parser.add_argument("second_bas", type=Path, nargs="?"); parser.add_argument("integrated_lp", type=Path, nargs="?")
-    parser.add_argument("--input-csv", type=Path, help="one-row CSV supplying LPs, bases, and scenario names"); parser.add_argument("--output-parent", required=True, type=Path); parser.add_argument("--scenario-a"); parser.add_argument("--scenario-b"); parser.add_argument("--parameter-file", required=True, type=Path); parser.add_argument("--strategy", choices=("relative_ascending", "relative_descending", "random", "all_at_once"), default="relative_ascending"); parser.add_argument("--random-seed", type=int, default=0); parser.add_argument("--repetitions", type=int, default=1); parser.add_argument("--measure", action=argparse.BooleanOptionalAction, default=True); parser.add_argument("--run-label")
+    parser.add_argument("--input-csv", type=Path, help="CSV supplying source LPs, bases, and scenario names"); parser.add_argument("--scenario", action="append", nargs=3, metavar=("NAME", "LP", "BAS"), help="scenario identifier, source LP, and source BAS; repeat for each scenario"); parser.add_argument("--integrated-lp", dest="integrated_lp_option", type=Path, help="integrated LP used with repeated --scenario"); parser.add_argument("--output-parent", required=True, type=Path); parser.add_argument("--scenario-a"); parser.add_argument("--scenario-b"); parser.add_argument("--reference-scenario", help="scenario used on the +1 side of coupling rows (default: first scenario)"); parser.add_argument("--parameter-file", required=True, type=Path); parser.add_argument("--strategy", choices=("relative_ascending", "relative_descending", "random", "all_at_once"), default="relative_ascending"); parser.add_argument("--random-seed", type=int, default=0); parser.add_argument("--repetitions", type=int, default=1); parser.add_argument("--measure", action=argparse.BooleanOptionalAction, default=True); parser.add_argument("--run-label")
     args = parser.parse_args()
     apply_input_csv(args, parser)
     if args.repetitions < 1: parser.error("--repetitions must be at least 1")
-    adapter = get_solver_adapter(args.solver); first = second = integrated = None; output_dir = create_run_directory(args.output_parent, args.integrated_lp, args.solver, f"stepwise_{args.strategy}" + (f"_{args.run_label}" if args.run_label else "")); report = {"solver": args.solver, "strategy": args.strategy, "output_dir": str(output_dir), "integrated_lp": str(args.integrated_lp), "status": "ERROR"}
+    adapter = get_solver_adapter(args.solver); source_models = []; integrated = None; reference_scenario = args.reference_scenario or args.scenarios[0][0]; output_dir = create_run_directory(args.output_parent, args.integrated_lp, args.solver, f"stepwise_{args.strategy}" + (f"_{args.run_label}" if args.run_label else "")); report = {"solver": args.solver, "strategy": args.strategy, "output_dir": str(output_dir), "integrated_lp": str(args.integrated_lp), "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios], "reference_scenario": reference_scenario, "status": "ERROR"}
     try:
-        first = adapter.load_model(args.first_lp); second = adapter.load_model(args.second_lp); first_columns, first_rows = adapter.get_model_names(first); second_columns, second_rows = adapter.get_model_names(second); require_same_structure(first_columns, first_rows, second_columns, second_rows); investments = investment_variables(first_columns)
-        coupling_rows = [nonanticipativity_row_name(name, args.scenario_a, args.scenario_b) for name in investments]; combined = build_combined_basis(args.first_bas, args.second_bas, first_columns, first_rows, second_columns, second_rows, investments, args.scenario_a, args.scenario_b)
+        source_descriptors = []; canonical_columns = canonical_rows = None
+        for name, lp, bas in args.scenarios:
+            model = adapter.load_model(lp); source_models.append(model); columns, rows = adapter.get_model_names(model)
+            if canonical_columns is None: canonical_columns, canonical_rows = columns, rows
+            else: require_same_structure(canonical_columns, canonical_rows, columns, rows)
+            source_descriptors.append((name, bas, columns, rows))
+        investments = investment_variables(canonical_columns)
+        scenario_names = [name for name, _lp, _bas in args.scenarios]
+        coupling_rows = nonanticipativity_row_names(investments, scenario_names, reference_scenario); combined = build_combined_basis(source_descriptors, investments, reference_scenario)
+        coupling_specs = [
+            {"row_name": nonanticipativity_row_name(variable, reference_scenario, scenario), "original_name": variable, "reference_scenario": reference_scenario, "scenario": scenario}
+            for variable in investments for scenario in scenario_names if scenario != reference_scenario
+        ]
         integrated = adapter.load_model(args.integrated_lp); adapter.remove_rows(integrated, coupling_rows); columns, rows = adapter.get_model_names(integrated); uncoupled = reorder_basis_vectors(without_rows(combined, set(coupling_rows)), columns, rows); uncoupled_basis = output_dir / "uncoupled_warmstart.bas.gz"; write_mps_bas(uncoupled_basis, uncoupled.col_names, uncoupled.row_names, uncoupled.col_status, uncoupled.row_status, problem_name="TWOSTAGE_STEPWISE")
         workers = output_dir / "workers"; workers.mkdir(); results = []
         for repetition in range(1, args.repetitions + 1):
-            prefix = f"repetition_{repetition:03d}"; config = {"solver": args.solver, "repetition": repetition, "total_repetitions": args.repetitions, "integrated_lp": str(args.integrated_lp), "parameter_file": str(args.parameter_file), "uncoupled_basis_file": str(uncoupled_basis), "couplings": list(zip(coupling_rows, investments)), "coupling_rows": coupling_rows, "scenario_a": args.scenario_a, "scenario_b": args.scenario_b, "strategy": args.strategy, "random_seed": args.random_seed, "solver_log": str(output_dir / f"{prefix}.solver.log"), "steps_csv": str(output_dir / f"{prefix}.steps.csv"), "output_dir": str(output_dir), "config_path": str(workers / f"{prefix}.json"), "result_path": str(workers / f"{prefix}.result.json")}; Path(config["config_path"]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+            prefix = f"repetition_{repetition:03d}"; config = {"solver": args.solver, "repetition": repetition, "total_repetitions": args.repetitions, "integrated_lp": str(args.integrated_lp), "parameter_file": str(args.parameter_file), "uncoupled_basis_file": str(uncoupled_basis), "couplings": coupling_specs, "coupling_rows": coupling_rows, "strategy": args.strategy, "random_seed": args.random_seed, "solver_log": str(output_dir / f"{prefix}.solver.log"), "steps_csv": str(output_dir / f"{prefix}.steps.csv"), "output_dir": str(output_dir), "config_path": str(workers / f"{prefix}.json"), "result_path": str(workers / f"{prefix}.result.json")}; Path(config["config_path"]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
             command = [sys.executable, str(Path(__file__).resolve()), "--worker-config", config["config_path"]]
             if args.measure:
                 if shutil.which("perf"):
@@ -144,7 +164,7 @@ def main() -> int:
         report.update({"status": status, "uncoupled_warmstart_basis": str(uncoupled_basis), "coupling_rows": len(coupling_rows), "repetitions": results})
     except Exception as error: report["message"] = str(error)
     finally:
-        for model in (integrated, second, first):
+        for model in (integrated, *source_models):
             if model is not None: adapter.dispose(model)
         (output_dir / "stepwise_report.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2, default=str)); return 0 if report["status"] == "SOLVED" else 2

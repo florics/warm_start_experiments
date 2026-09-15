@@ -1,6 +1,6 @@
 # Stepwise Two-Stage Warm Starts
 
-`stepwise_two_stage.py` starts from the integrated two-scenario LP, removes all
+`stepwise_two_stage.py` starts from the integrated two-stage LP, removes all
 named non-anticipativity rows in memory, installs the combined uncoupled basis,
 and solves that uncoupled model once. It then adds satisfied coupling rows in a
 batch and one dynamically selected violated row at a time, reoptimizing the
@@ -29,6 +29,22 @@ python3 stepwise_two_stage.py gurobi --input-csv experiment.csv \
 
 CSV-relative paths resolve from the CSV directory. Explicit scenario flags
 override their CSV values.
+
+For an LP with more than two scenarios, use the same repeated `--scenario NAME
+LP BAS` and `--integrated-lp` form as the all-at-once constructor. Coupling rows
+form a reference star: each investment variable is coupled from the first input
+scenario, or the scenario named by `--reference-scenario`, to every other
+scenario. The multi-scenario CSV schema is `integrated_lp,lp,bas,scenarioname`,
+with one row per source scenario.
+
+```bash
+python3 stepwise_two_stage.py gurobi \
+  --integrated-lp integrated.lp.gz --output-parent results \
+  --scenario base base.lp.gz base.bas.gz \
+  --scenario electricity1p2 electricity.lp.gz electricity.bas.gz \
+  --scenario heat1p2 heat.lp.gz heat.bas.gz \
+  --reference-scenario base --parameter-file dualsmplx_1Thrd.prm
+```
 
 Strategies are `relative_ascending`, `relative_descending`, `random`, and
 `all_at_once`. Use `--random-seed` to reproduce random ordering. Repetitions
