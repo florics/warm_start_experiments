@@ -103,7 +103,7 @@ class XpressAdapter:
         try: return getattr(p.attributes,name)
         except Exception: return None
 
-    def collect_result(self,p,external_wallclock=None):
+    def collect_result(self,p,external_wallclock=None,external_cpu_time=None):
         # Preserve the later Xpress fix: SOLSTATUS=1 means optimal, and integer
         # status objects must not be classified by their string representation.
         solstatus=self._safe_attr(p,"solstatus"); lpstatus=self._safe_attr(p,"lpstatus"); solvestatus=self._safe_attr(p,"solvestatus")
@@ -126,7 +126,7 @@ class XpressAdapter:
             except Exception: status_name="OPTIMAL" if is_optimal else f"LPSTATUS({lpstatus})"
         obj=self._safe_attr(p,"objval")
         if obj is None: obj=self._safe_attr(p,"lpobjval")
-        return {"status":status_name,"status_code":status_obj,"is_optimal":is_optimal,"objective_value":obj,"solve_time_s":self._safe_attr(p,"time"),"external_wallclock_s":external_wallclock,"simplex_iterations":self._safe_attr(p,"simplexiter"),"barrier_iterations":self._safe_attr(p,"bariter"),"work_units":None,"solve_status":str(solvestatus)}
+        return {"status":status_name,"status_code":status_obj,"is_optimal":is_optimal,"objective_value":obj,"solve_time_s":self._safe_attr(p,"time"),"external_wallclock_s":external_wallclock,"external_cpu_time_s":external_cpu_time,"simplex_iterations":self._safe_attr(p,"simplexiter"),"barrier_iterations":self._safe_attr(p,"bariter"),"work_units":None,"solve_status":str(solvestatus)}
 
     def print_model_information(self,p):
         print("\n--- Xpress model statistics ---\n")
@@ -137,9 +137,10 @@ class XpressAdapter:
             except Exception: print(f"{name}: not available")
         print()
 
-    def print_postsolve_information(self,p,external_wallclock=0.0):
+    def print_postsolve_information(self,p,external_wallclock=0.0,external_cpu_time=None):
         print("\n"+"="*80); print("XPRESS POST-SOLVE INFORMATION"); print("="*80)
         if external_wallclock is not None: print(f"External wallclock time: {external_wallclock:.6f} sec")
+        if external_cpu_time is not None: print(f"External CPU time: {external_cpu_time:.6f} sec")
         for name in ("solvestatus","solstatus","lpstatus","objval","lpobjval","rows","cols","elems","simplexiter","bariter","time"):
             print(f"{name}: {self._safe_attr(p,name)}")
         print("="*80+"\n")

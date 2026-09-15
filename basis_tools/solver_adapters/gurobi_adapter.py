@@ -89,7 +89,7 @@ class GurobiAdapter:
         except Exception:
             return None
 
-    def collect_result(self, model, external_wallclock=None):
+    def collect_result(self, model, external_wallclock=None, external_cpu_time=None):
         status_code = int(model.Status)
         sol_count = self._safe_attr(model, "SolCount")
         return {
@@ -97,7 +97,7 @@ class GurobiAdapter:
             "is_optimal": status_code == self.GRB.OPTIMAL,
             "objective_value": self._safe_attr(model, "ObjVal") if sol_count and sol_count > 0 else None,
             "solve_time_s": self._safe_attr(model, "Runtime"),
-            "external_wallclock_s": external_wallclock,
+            "external_wallclock_s": external_wallclock, "external_cpu_time_s": external_cpu_time,
             "simplex_iterations": self._safe_attr(model, "IterCount"),
             "barrier_iterations": self._safe_attr(model, "BarIterCount"),
             "work_units": self._safe_attr(model, "Work"),
@@ -120,10 +120,12 @@ class GurobiAdapter:
             except Exception: print(f"{parameter}: not available")
         print()
 
-    def print_postsolve_information(self, model, external_wallclock=0.0):
+    def print_postsolve_information(self, model, external_wallclock=0.0, external_cpu_time=None):
         print("\n" + "="*80); print("GUROBI POST-SOLVE INFORMATION"); print("="*80)
         if external_wallclock is not None:
             print(f"External wallclock time: {external_wallclock:.6f} sec")
+        if external_cpu_time is not None:
+            print(f"External CPU time: {external_cpu_time:.6f} sec")
         for name in self._ATTRIBUTES_TO_PRINT:
             value = self._safe_attr(model, name)
             print(f"{name}: {'not available' if value is None else value}")

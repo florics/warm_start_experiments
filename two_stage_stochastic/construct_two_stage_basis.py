@@ -125,7 +125,7 @@ def create_run_directory(output_parent: Path, integrated_lp: Path, solver: str, 
 
 def summarize_repetitions(results: list[dict[str, object]]) -> dict[str, object]:
     summary = {"requested": len(results), "optimal": sum(result["is_optimal"] for result in results)}
-    for field in ("external_wallclock_s", "solve_time_s", "simplex_iterations"):
+    for field in ("external_wallclock_s", "external_cpu_time_s", "solve_time_s", "simplex_iterations"):
         values = [float(result[field]) for result in results if isinstance(result.get(field), (int, float))]
         if values:
             summary[field] = {"min": min(values), "median": statistics.median(values), "max": max(values)}
@@ -194,9 +194,11 @@ def run_worker(config_path: Path) -> int:
         elif config["check_initial_dual_feasibility"]:
             print("[PHASE] INITIAL_DUAL_FEASIBILITY_EVIDENCE: extracting iteration-zero log evidence.", flush=True)
         print("[PHASE] INTEGRATED_WARMSTART_SOLVE: optimizing the reloaded BAS with the supplied parameter file.", flush=True)
-        start = time.perf_counter()
+        wall_start = time.perf_counter()
+        cpu_start = time.process_time()
         adapter.optimize(model)
-        result.update(adapter.collect_result(model, time.perf_counter() - start))
+        result.update(adapter.collect_result(model, time.perf_counter() - wall_start, time.process_time() - cpu_start))
+        adapter.print_postsolve_information(model, result["external_wallclock_s"], result["external_cpu_time_s"])
         result["initial_dual_feasibility"] = (
             initial_probe or initial_dual_feasibility_from_log(config["solver"], Path(config["solver_log"]))
             if config["check_initial_dual_feasibility"] else {"status": "DISABLED"}
@@ -281,6 +283,7 @@ def main() -> int:
         "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios],
         "reference_scenario": reference_scenario,
         "write_artifacts": args.write_artifacts,
+        "measured_trial_scope": "fresh worker process; LP/parameter/basis setup; solve; result collection; disposal",
         "integrated_lp": str(args.integrated_lp),
         "warmstart_basis_file": str(output_bas),
     }

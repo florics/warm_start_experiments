@@ -28,8 +28,8 @@ STEP_COLUMNS = [
     "step", "strategy", "satisfied_rows_added", "selected_row", "first_variable", "second_variable",
     "first_value_before", "second_value_before", "absolute_disagreement", "relative_disagreement",
     "first_basic_before", "second_basic_before", "couplings_present", "couplings_remaining",
-    "objective_before", "objective_after", "simplex_iterations", "runtime_s", "work_units",
-    "cumulative_simplex_iterations", "cumulative_runtime_s", "became_satisfied", "violated_before",
+    "objective_before", "objective_after", "simplex_iterations", "runtime_s", "cpu_time_s", "solver_time_s", "work_units",
+    "cumulative_simplex_iterations", "cumulative_runtime_s", "cumulative_cpu_time_s", "became_satisfied", "violated_before",
     "max_relative_before", "mean_relative_before", "violated_after", "max_relative_after", "mean_relative_after",
 ]
 
@@ -45,7 +45,18 @@ def write_steps(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writeheader(); writer.writerows(rows)
 
 
-def append_step(rows, *, step, strategy, satisfied, selected, basic, present, remaining, before, after, solve, cumulative_iterations, cumulative_runtime, became_satisfied, violations_before, violations_after):
+def measure_optimize(adapter, model):
+    wall_start = time.perf_counter()
+    cpu_start = time.process_time()
+    adapter.optimize(model)
+    return adapter.collect_result(
+        model,
+        time.perf_counter() - wall_start,
+        time.process_time() - cpu_start,
+    )
+
+
+def append_step(rows, *, step, strategy, satisfied, selected, basic, present, remaining, before, after, solve, cumulative_iterations, cumulative_runtime, cumulative_cpu_time, became_satisfied, violations_before, violations_after):
     selected_data = selected or {}
     coupling = selected_data.get("coupling")
     rows.append({
@@ -55,9 +66,9 @@ def append_step(rows, *, step, strategy, satisfied, selected, basic, present, re
         "absolute_disagreement": selected_data.get("absolute", ""), "relative_disagreement": selected_data.get("relative", ""),
         "first_basic_before": basic[coupling.first_index] if coupling else "", "second_basic_before": basic[coupling.second_index] if coupling else "",
         "couplings_present": present, "couplings_remaining": remaining, "objective_before": before,
-        "objective_after": after, "simplex_iterations": solve.get("simplex_iterations", 0), "runtime_s": solve.get("external_wallclock_s", 0.0),
+        "objective_after": after, "simplex_iterations": solve.get("simplex_iterations", 0), "runtime_s": solve.get("external_wallclock_s", 0.0), "cpu_time_s": solve.get("external_cpu_time_s", 0.0), "solver_time_s": solve.get("solve_time_s", ""),
         "work_units": solve.get("work_units", ""), "cumulative_simplex_iterations": cumulative_iterations,
-        "cumulative_runtime_s": cumulative_runtime, "became_satisfied": became_satisfied,
+        "cumulative_runtime_s": cumulative_runtime, "cumulative_cpu_time_s": cumulative_cpu_time, "became_satisfied": became_satisfied,
         "violated_before": violation_summary(violations_before)["count"], "max_relative_before": violation_summary(violations_before)["max_relative"],
         "mean_relative_before": violation_summary(violations_before)["mean_relative"], "violated_after": violation_summary(violations_after)["count"],
         "max_relative_after": violation_summary(violations_after)["max_relative"], "mean_relative_after": violation_summary(violations_after)["mean_relative"],
@@ -82,17 +93,19 @@ def solve_worker(config_path: Path) -> int:
             for item in config["couplings"]
         ]
         print(f"[PHASE] STEPWISE {config['repetition']}/{config['total_repetitions']}: solve uncoupled model once.", flush=True)
-        start = time.perf_counter(); adapter.optimize(model); initial = adapter.collect_result(model, time.perf_counter() - start)
+        initial = measure_optimize(adapter, model)
+        adapter.print_postsolve_information(model, initial["external_wallclock_s"], initial["external_cpu_time_s"])
         if not initial.get("is_optimal"):
             result.update(initial); result["status"] = "UNCoupled_SOLVE_FAILED"; return 0
-        rows = []; remaining = list(couplings); rng = random.Random(config["random_seed"]); cumulative_iterations = int(initial.get("simplex_iterations") or 0); cumulative_runtime = float(initial.get("external_wallclock_s") or 0.0); step = 0
+        rows = []; remaining = list(couplings); rng = random.Random(config["random_seed"]); cumulative_iterations = int(initial.get("simplex_iterations") or 0); cumulative_runtime = float(initial.get("external_wallclock_s") or 0.0); cumulative_cpu_time = float(initial.get("external_cpu_time_s") or 0.0); step = 0
         if config["strategy"] == "all_at_once":
             values, basic = adapter.get_column_values_and_basic(model); before = initial.get("objective_value")
             for coupling in remaining: adapter.add_equality_row(model, coupling.first_index, coupling.second_index, coupling.row_name)
-            start = time.perf_counter(); solved = adapter.collect_result(model, time.perf_counter() - start) if not remaining else None
+            solved = adapter.collect_result(model, 0.0, 0.0) if not remaining else None
             if remaining:
-                start = time.perf_counter(); adapter.optimize(model); solved = adapter.collect_result(model, time.perf_counter() - start)
-            append_step(rows, step=1, strategy=config["strategy"], satisfied=[], selected=None, basic=basic, present=0, remaining=0, before=before, after=solved.get("objective_value"), solve=solved, cumulative_iterations=cumulative_iterations + int(solved.get("simplex_iterations") or 0), cumulative_runtime=cumulative_runtime + float(solved.get("external_wallclock_s") or 0.0), became_satisfied=0, violations_before=[], violations_after=[])
+                solved = measure_optimize(adapter, model)
+                adapter.print_postsolve_information(model, solved["external_wallclock_s"], solved["external_cpu_time_s"])
+            append_step(rows, step=1, strategy=config["strategy"], satisfied=[], selected=None, basic=basic, present=0, remaining=0, before=before, after=solved.get("objective_value"), solve=solved, cumulative_iterations=cumulative_iterations + int(solved.get("simplex_iterations") or 0), cumulative_runtime=cumulative_runtime + float(solved.get("external_wallclock_s") or 0.0), cumulative_cpu_time=cumulative_cpu_time + float(solved.get("external_cpu_time_s") or 0.0), became_satisfied=0, violations_before=[], violations_after=[])
             remaining = [] ; final = solved
         else:
             final = initial
@@ -103,14 +116,15 @@ def solve_worker(config_path: Path) -> int:
                 remaining = [coupling for coupling in remaining if coupling not in satisfied]
                 violated = [record for record in records if not record["satisfied"]]
                 if not remaining:
-                    append_step(rows, step=step + 1, strategy=config["strategy"], satisfied=satisfied, selected=None, basic=basic, present=len(couplings), remaining=0, before=final.get("objective_value"), after=final.get("objective_value"), solve={}, cumulative_iterations=cumulative_iterations, cumulative_runtime=cumulative_runtime, became_satisfied=0, violations_before=violated, violations_after=[])
+                    append_step(rows, step=step + 1, strategy=config["strategy"], satisfied=satisfied, selected=None, basic=basic, present=len(couplings), remaining=0, before=final.get("objective_value"), after=final.get("objective_value"), solve={}, cumulative_iterations=cumulative_iterations, cumulative_runtime=cumulative_runtime, cumulative_cpu_time=cumulative_cpu_time, became_satisfied=0, violations_before=violated, violations_after=[])
                     break
                 selected = rank_violations(violated, config["strategy"], rng); coupling = selected["coupling"]; adapter.add_equality_row(model, coupling.first_index, coupling.second_index, coupling.row_name); remaining.remove(coupling)
-                before = final.get("objective_value"); start = time.perf_counter(); final = adapter.optimize(model) or adapter.collect_result(model, time.perf_counter() - start)
-                cumulative_iterations += int(final.get("simplex_iterations") or 0); cumulative_runtime += float(final.get("external_wallclock_s") or 0.0)
+                before = final.get("objective_value"); final = measure_optimize(adapter, model)
+                adapter.print_postsolve_information(model, final["external_wallclock_s"], final["external_cpu_time_s"])
+                cumulative_iterations += int(final.get("simplex_iterations") or 0); cumulative_runtime += float(final.get("external_wallclock_s") or 0.0); cumulative_cpu_time += float(final.get("external_cpu_time_s") or 0.0)
                 after_values, _ = adapter.get_column_values_and_basic(model); after_violated = [disagreement(item, after_values, tolerance) for item in remaining if not disagreement(item, after_values, tolerance)["satisfied"]]
                 became = len([record for record in violated if record["coupling"] in remaining and record["coupling"] not in [item["coupling"] for item in after_violated]])
-                step += 1; append_step(rows, step=step, strategy=config["strategy"], satisfied=satisfied, selected=selected, basic=basic, present=len(couplings) - len(remaining), remaining=len(remaining), before=before, after=final.get("objective_value"), solve=final, cumulative_iterations=cumulative_iterations, cumulative_runtime=cumulative_runtime, became_satisfied=became, violations_before=violated, violations_after=after_violated)
+                step += 1; append_step(rows, step=step, strategy=config["strategy"], satisfied=satisfied, selected=selected, basic=basic, present=len(couplings) - len(remaining), remaining=len(remaining), before=before, after=final.get("objective_value"), solve=final, cumulative_iterations=cumulative_iterations, cumulative_runtime=cumulative_runtime, cumulative_cpu_time=cumulative_cpu_time, became_satisfied=became, violations_before=violated, violations_after=after_violated)
         values, _ = adapter.get_column_values_and_basic(model); final_records = [disagreement(coupling, values, tolerance) for coupling in couplings]
         if config["write_artifacts"]:
             write_steps(Path(config["steps_csv"]), rows)
@@ -135,7 +149,7 @@ def main() -> int:
     args = parser.parse_args()
     apply_input_csv(args, parser)
     if args.repetitions < 1: parser.error("--repetitions must be at least 1")
-    adapter = get_solver_adapter(args.solver); source_models = []; integrated = None; reference_scenario = args.reference_scenario or args.scenarios[0][0]; output_dir = create_run_directory(args.output_parent, args.integrated_lp, args.solver, f"stepwise_{args.strategy}" + (f"_{args.run_label}" if args.run_label else "")); report = {"solver": args.solver, "strategy": args.strategy, "output_dir": str(output_dir), "integrated_lp": str(args.integrated_lp), "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios], "reference_scenario": reference_scenario, "write_artifacts": args.write_artifacts, "status": "ERROR"}
+    adapter = get_solver_adapter(args.solver); source_models = []; integrated = None; reference_scenario = args.reference_scenario or args.scenarios[0][0]; output_dir = create_run_directory(args.output_parent, args.integrated_lp, args.solver, f"stepwise_{args.strategy}" + (f"_{args.run_label}" if args.run_label else "")); report = {"solver": args.solver, "strategy": args.strategy, "output_dir": str(output_dir), "integrated_lp": str(args.integrated_lp), "scenarios": [{"name": name, "lp": str(lp), "basis": str(bas)} for name, lp, bas in args.scenarios], "reference_scenario": reference_scenario, "write_artifacts": args.write_artifacts, "measured_trial_scope": "fresh worker process; LP/parameter/basis setup; stepwise solve sequence; result collection; disposal", "status": "ERROR"}
     try:
         source_descriptors = []; canonical_columns = canonical_rows = None
         for name, lp, bas in args.scenarios:

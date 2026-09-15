@@ -37,12 +37,12 @@ DETAILED_SUMMARY_COLUMNS = [
     "warmstart_source_name", "warmstart_basis_description", "warmstart_basis_file",
     "parameter_file", "log_file", "optimal_basis_file", "ebf_vars_csv",
     "ebf_constrs_csv", "solver_status", "status_code", "objective_value",
-    "solve_time_s", "external_wallclock_s", "simplex_iterations", "work_units",
+    "solve_time_s", "external_wallclock_s", "external_cpu_time_s", "simplex_iterations", "work_units",
     "message",
 ]
 SHORT_SUMMARY_COLUMNS = [
     "timestamp", "solver", "repetition", "problem_name", "warmstart_source_name",
-    "warmstart_basis_description", "solver_status", "solve_time_s",
+    "warmstart_basis_description", "solver_status", "solve_time_s", "external_wallclock_s", "external_cpu_time_s",
     "simplex_iterations", "work_units",
 ]
 
@@ -165,7 +165,7 @@ def write_experiment_info(path,adapter,args,data_csv,experiments_csv,copied_para
         f.write("Dual-simplex warm-start batch experiment\n"+"="*80+"\n\n")
         f.write(f"Created: {datetime.now().isoformat()}\nSolver key: {adapter.name}\nSolver: {version.get('solver')}\nSolver version: {version.get('solver_version')}\nPython API: {version.get('python_api')}\nPython API version: {version.get('python_api_version')}\nPython executable: {sys.executable}\nPython version: {sys.version}\nHostname: {socket.gethostname()}\nPlatform: {platform.platform()}\n")
         f.write("\nInput and experiment selection\n"+"-"*80+"\n")
-        f.write(f"Data CSV: {data_csv}\nExperiments CSV: {experiments_csv if experiments_csv else 'not used'}\nSelection mode: {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nRepetitions: {args.repetitions}\nDatasets: {len(datasets)}\nSelected experiments: {len(experiments)}\nPlanned solves: {len(experiments)*args.repetitions}\nCopied parameters: {copied_param}\nEffective parameters: {effective_param}\nValidated settings: {validated}\nWrite post-solve artifacts: {args.write_artifacts}\nEBF bound tolerance: {args.bound_tolerance}\nCompressed output artifacts: {args.compress_output}\nPer-trial measurement: /usr/bin/time -v perf stat -e cycles,instructions,task-clock,cpu-clock\nMeasurement output: standard error redirected to standard output (the batch/SLURM .out log)\n")
+        f.write(f"Data CSV: {data_csv}\nExperiments CSV: {experiments_csv if experiments_csv else 'not used'}\nSelection mode: {'all ordered combinations' if args.all_experiments else 'explicit subset'}\nRepetitions: {args.repetitions}\nDatasets: {len(datasets)}\nSelected experiments: {len(experiments)}\nPlanned solves: {len(experiments)*args.repetitions}\nCopied parameters: {copied_param}\nEffective parameters: {effective_param}\nValidated settings: {validated}\nWrite post-solve artifacts: {args.write_artifacts}\nSolve-only timer scope: adapter.optimize()\nEnd-to-end trial scope: fresh worker process; LP/options/basis setup; solve; result collection; disposal\nEBF bound tolerance: {args.bound_tolerance}\nCompressed output artifacts: {args.compress_output}\nPer-trial measurement: /usr/bin/time -v perf stat -e cycles,instructions,task-clock,cpu-clock\nMeasurement output: standard error redirected to standard output (the batch/SLURM .out log)\n")
         f.write("\nEBF\n"+"-"*80+"\n")
         f.write(f"Format: {fmt['name']} ({fmt['abbreviation']}) {fmt['version']}\nImplementation module: basis_tools.ebf\nVariable columns: var_name,basis_status,bound_status,value\nConstraint columns: constr_name,basis_status,bound_status,activity\nbasis_status: BASIC, NONBASIC, SUPERBASIC\nbound_status: LOWER, UPPER, FIXED, INTERIOR, FREE\n")
         f.write("Constraint bound_status is derived from row activity and row bounds, not native row/slack status.\n")
@@ -180,7 +180,7 @@ def write_experiment_info(path,adapter,args,data_csv,experiments_csv,copied_para
 
 
 def blank_result(adapter,target,source,repetition,param_file,log_file):
-    return {"timestamp":timestamp_now(),"solver":adapter.name,"repetition":repetition,"problem_name":target["name"],"lp_file":str(target["lp_file"]),"warmstart_source_name":source["name"],"warmstart_basis_description":source["basis_description"],"warmstart_basis_file":str(source["basis_file"]),"parameter_file":str(param_file),"log_file":str(log_file),"optimal_basis_file":"","ebf_vars_csv":"","ebf_constrs_csv":"","solver_status":"ERROR","status_code":"","objective_value":"","solve_time_s":"","external_wallclock_s":"","simplex_iterations":"","work_units":"","message":"","is_optimal":False}
+    return {"timestamp":timestamp_now(),"solver":adapter.name,"repetition":repetition,"problem_name":target["name"],"lp_file":str(target["lp_file"]),"warmstart_source_name":source["name"],"warmstart_basis_description":source["basis_description"],"warmstart_basis_file":str(source["basis_file"]),"parameter_file":str(param_file),"log_file":str(log_file),"optimal_basis_file":"","ebf_vars_csv":"","ebf_constrs_csv":"","solver_status":"ERROR","status_code":"","objective_value":"","solve_time_s":"","external_wallclock_s":"","external_cpu_time_s":"","simplex_iterations":"","work_units":"","message":"","is_optimal":False}
 
 
 def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basis_dir,ebf_dir,bound_tolerance,compress_output,write_artifacts,run_index,total_runs,experiment_index,total_experiments,total_repetitions):
@@ -198,9 +198,9 @@ def solve_one_warmstart(adapter,target,source,repetition,param_file,log_dir,basi
         except Exception as exc:
             row["solver_status"]="BASIS_READ_ERROR"; row["message"]=f"Failed to read warm-start basis: {exc}. Optimization was NOT started."; print("ERROR: warm-start basis could not be loaded.\n"+row["message"]); return row
         print("Warm-start basis loaded successfully.\nStarting optimization..."); sys.stdout.flush()
-        start=time.perf_counter(); adapter.optimize(model); wall=time.perf_counter()-start
-        result=adapter.collect_result(model,wall); adapter.print_postsolve_information(model,wall); sys.stdout.flush()
-        row.update({"solver_status":result.get("status",""),"status_code":result.get("status_code",""),"objective_value":result.get("objective_value",""),"solve_time_s":result.get("solve_time_s",""),"external_wallclock_s":result.get("external_wallclock_s",wall),"simplex_iterations":result.get("simplex_iterations",""),"work_units":result.get("work_units","")}); row["is_optimal"]=bool(result.get("is_optimal",False))
+        wall_start=time.perf_counter(); cpu_start=time.process_time(); adapter.optimize(model); wall=time.perf_counter()-wall_start; cpu=time.process_time()-cpu_start
+        result=adapter.collect_result(model,wall,cpu); adapter.print_postsolve_information(model,wall,cpu); sys.stdout.flush()
+        row.update({"solver_status":result.get("status",""),"status_code":result.get("status_code",""),"objective_value":result.get("objective_value",""),"solve_time_s":result.get("solve_time_s",""),"external_wallclock_s":result.get("external_wallclock_s",wall),"external_cpu_time_s":result.get("external_cpu_time_s",cpu),"simplex_iterations":result.get("simplex_iterations",""),"work_units":result.get("work_units","")}); row["is_optimal"]=bool(result.get("is_optimal",False))
         if write_artifacts and repetition==1 and row["is_optimal"]:
             if not adapter.has_basis(model): row["message"]=append_message(row["message"],"Optimal solve produced no valid basis; basis/EBF output skipped")
             else:

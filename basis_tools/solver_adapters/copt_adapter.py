@@ -81,9 +81,9 @@ class CoptAdapter:
             try: return getattr(model, name)
             except Exception: return None
 
-    def collect_result(self, h, external_wallclock=None):
+    def collect_result(self, h, external_wallclock=None, external_cpu_time=None):
         m=h.model; status_code=int(m.status); has_sol=self._safe_attr(m,"HasSol")
-        return {"status":self._status_name(status_code),"status_code":status_code,"is_optimal":status_code==self.COPT.OPTIMAL,"objective_value":self._safe_attr(m,"ObjVal") if has_sol else None,"solve_time_s":self._safe_attr(m,"SolvingTime"),"external_wallclock_s":external_wallclock,"simplex_iterations":self._safe_attr(m,"SimplexIter"),"barrier_iterations":self._safe_attr(m,"BarrierIter"),"work_units":None}
+        return {"status":self._status_name(status_code),"status_code":status_code,"is_optimal":status_code==self.COPT.OPTIMAL,"objective_value":self._safe_attr(m,"ObjVal") if has_sol else None,"solve_time_s":self._safe_attr(m,"SolvingTime"),"external_wallclock_s":external_wallclock,"external_cpu_time_s":external_cpu_time,"simplex_iterations":self._safe_attr(m,"SimplexIter"),"barrier_iterations":self._safe_attr(m,"BarrierIter"),"work_units":None}
 
     def _status_name(self, code):
         for name in ("UNSTARTED","OPTIMAL","INFEASIBLE","UNBOUNDED","INF_OR_UNB","NUMERICAL","NODELIMIT","IMPRECISE","TIMEOUT","UNFINISHED","INTERRUPTED","ITERLIMIT"):
@@ -100,9 +100,10 @@ class CoptAdapter:
             except Exception: print(f"{name}: not available")
         print()
 
-    def print_postsolve_information(self,h,external_wallclock=0.0):
+    def print_postsolve_information(self,h,external_wallclock=0.0,external_cpu_time=None):
         print("\n"+"="*80); print("COPT POST-SOLVE INFORMATION"); print("="*80)
         if external_wallclock is not None: print(f"External wallclock time: {external_wallclock:.6f} sec")
+        if external_cpu_time is not None: print(f"External CPU time: {external_cpu_time:.6f} sec")
         for name in self._ATTRIBUTES_TO_PRINT: print(f"{name}: {self._safe_attr(h.model,name)}")
         print("="*80+"\n")
     def print_diagnostics(self,h): self.print_postsolve_information(h,None)

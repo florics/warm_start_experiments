@@ -104,14 +104,14 @@ class HighsAdapter:
         if log_file: self.set_log_file(handle, log_file)
         self.optimize(handle)
 
-    def collect_result(self,handle,external_wallclock=None):
+    def collect_result(self,handle,external_wallclock=None,external_cpu_time=None):
         h=handle.highs; info=h.getInfo(); model_status=h.getModelStatus(); status_name=h.modelStatusToString(model_status)
         try: status_code=int(model_status.value)
         except Exception:
             try: status_code=int(model_status)
             except Exception: status_code=str(model_status)
         objective=getattr(info,"objective_function_value",None) if bool(getattr(info,"valid",False)) else None
-        return {"status":status_name,"status_code":status_code,"is_optimal":model_status==self.highspy.HighsModelStatus.kOptimal,"objective_value":objective,"solve_time_s":handle.solver_runtime_delta,"external_wallclock_s":external_wallclock,"simplex_iterations":getattr(info,"simplex_iteration_count",None),"barrier_iterations":getattr(info,"ipm_iteration_count",None),"work_units":None}
+        return {"status":status_name,"status_code":status_code,"is_optimal":model_status==self.highspy.HighsModelStatus.kOptimal,"objective_value":objective,"solve_time_s":handle.solver_runtime_delta,"external_wallclock_s":external_wallclock,"external_cpu_time_s":external_cpu_time,"simplex_iterations":getattr(info,"simplex_iteration_count",None),"barrier_iterations":getattr(info,"ipm_iteration_count",None),"work_units":None}
 
     def print_model_information(self,handle):
         h=handle.highs; lp=h.getLp(); print("\n--- HiGHS model statistics ---\n"); print(f"Columns: {lp.num_col_}\nRows: {lp.num_row_}\nNonzeros: {h.getNumNz()}")
@@ -121,9 +121,10 @@ class HighsAdapter:
             except Exception: print(f"{name}: not available")
         print()
 
-    def print_postsolve_information(self,handle,external_wallclock=0.0):
+    def print_postsolve_information(self,handle,external_wallclock=0.0,external_cpu_time=None):
         h=handle.highs; print("\n"+"="*80); print("HIGHS POST-SOLVE INFORMATION"); print("="*80)
         if external_wallclock is not None: print(f"External wallclock time: {external_wallclock:.6f} sec")
+        if external_cpu_time is not None: print(f"External CPU time: {external_cpu_time:.6f} sec")
         print(f"HiGHS run-time delta: {handle.solver_runtime_delta}")
         try: print(f"Model status: {h.modelStatusToString(h.getModelStatus())}")
         except Exception: pass
