@@ -125,7 +125,7 @@ def create_run_directory(output_parent: Path, integrated_lp: Path, solver: str, 
 
 def summarize_repetitions(results: list[dict[str, object]]) -> dict[str, object]:
     summary = {"requested": len(results), "optimal": sum(result["is_optimal"] for result in results)}
-    for field in ("external_wallclock_s", "external_cpu_time_s", "solve_time_s", "simplex_iterations"):
+    for field in ("external_wallclock_s", "external_cpu_time_s", "solve_time_s", "simplex_iterations", "work_units"):
         values = [float(result[field]) for result in results if isinstance(result.get(field), (int, float))]
         if values:
             summary[field] = {"min": min(values), "median": statistics.median(values), "max": max(values)}

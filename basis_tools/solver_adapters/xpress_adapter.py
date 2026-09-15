@@ -126,7 +126,7 @@ class XpressAdapter:
             except Exception: status_name="OPTIMAL" if is_optimal else f"LPSTATUS({lpstatus})"
         obj=self._safe_attr(p,"objval")
         if obj is None: obj=self._safe_attr(p,"lpobjval")
-        return {"status":status_name,"status_code":status_obj,"is_optimal":is_optimal,"objective_value":obj,"solve_time_s":self._safe_attr(p,"time"),"external_wallclock_s":external_wallclock,"external_cpu_time_s":external_cpu_time,"simplex_iterations":self._safe_attr(p,"simplexiter"),"barrier_iterations":self._safe_attr(p,"bariter"),"work_units":None,"solve_status":str(solvestatus)}
+        return {"status":status_name,"status_code":status_obj,"is_optimal":is_optimal,"objective_value":obj,"solve_time_s":self._safe_attr(p,"time"),"external_wallclock_s":external_wallclock,"external_cpu_time_s":external_cpu_time,"simplex_iterations":self._safe_attr(p,"simplexiter"),"barrier_iterations":self._safe_attr(p,"bariter"),"work_units":self._safe_attr(p,"work"),"solve_status":str(solvestatus)}
 
     def print_model_information(self,p):
         print("\n--- Xpress model statistics ---\n")
