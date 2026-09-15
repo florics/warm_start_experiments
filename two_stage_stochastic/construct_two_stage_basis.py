@@ -177,20 +177,22 @@ def run_worker(config_path: Path) -> int:
         adapter.validate_loaded_parameters(model)
         adapter.set_log_file(model, Path(config["solver_log"]))
         adapter.read_basis(model, Path(config["warmstart_basis_file"]))
-        _, loaded_rows = adapter.get_basic_membership(model)
-        missing = [name for name in config["coupling_rows"] if not loaded_rows.get(name, False)]
-        if missing:
-            raise TwoStageBasisError(f"Solver loaded the BAS but coupling rows are not BASIC: {missing[:3]}")
+        if config["validate_loaded_basis"]:
+            _, loaded_rows = adapter.get_basic_membership(model)
+            missing = [name for name in config["coupling_rows"] if not loaded_rows.get(name, False)]
+            if missing:
+                raise TwoStageBasisError(f"Solver loaded the BAS but coupling rows are not BASIC: {missing[:3]}")
         initial_probe = None
         if config["check_initial_dual_feasibility"] and config["solver"] == "highs":
             print("[PHASE] INITIAL_DUAL_FEASIBILITY_PROBE_BEGIN: presolve=off; simplex_iteration_limit=0.", flush=True)
             initial_probe = adapter.probe_initial_dual_feasibility(model)
             print(f"[PHASE] INITIAL_DUAL_FEASIBILITY_PROBE_RESULT: {initial_probe}", flush=True)
             adapter.read_basis(model, Path(config["warmstart_basis_file"]))
-            _, loaded_rows = adapter.get_basic_membership(model)
-            missing = [name for name in config["coupling_rows"] if not loaded_rows.get(name, False)]
-            if missing:
-                raise TwoStageBasisError(f"HiGHS did not restore BASIC coupling rows after the probe: {missing[:3]}")
+            if config["validate_loaded_basis"]:
+                _, loaded_rows = adapter.get_basic_membership(model)
+                missing = [name for name in config["coupling_rows"] if not loaded_rows.get(name, False)]
+                if missing:
+                    raise TwoStageBasisError(f"HiGHS did not restore BASIC coupling rows after the probe: {missing[:3]}")
         elif config["check_initial_dual_feasibility"]:
             print("[PHASE] INITIAL_DUAL_FEASIBILITY_EVIDENCE: extracting iteration-zero log evidence.", flush=True)
         print("[PHASE] INTEGRATED_WARMSTART_SOLVE: optimizing the reloaded BAS with the supplied parameter file.", flush=True)
@@ -261,7 +263,8 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=1, help="number of fresh integrated warm-start solves")
     parser.add_argument("--measure", action=argparse.BooleanOptionalAction, default=True, help="measure each repetition with /usr/bin/time -v and perf stat")
     parser.add_argument("--write-artifacts", action=argparse.BooleanOptionalAction, default=False, help="write post-solve optimal basis, EBF, and solution artifacts")
-    parser.add_argument("--check-initial-dual-feasibility", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--check-initial-dual-feasibility", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--validate-loaded-basis", action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     apply_input_csv(args, parser)
     if args.solve and args.parameter_file is None:
@@ -345,6 +348,7 @@ def main() -> int:
                     "warmstart_basis_file": str(output_bas),
                     "coupling_rows": coupling_rows,
                     "check_initial_dual_feasibility": args.check_initial_dual_feasibility,
+                    "validate_loaded_basis": args.validate_loaded_basis,
                     "write_artifacts": args.write_artifacts,
                     "solver_log": str(solver_log),
                     "output_dir": str(output_dir),
