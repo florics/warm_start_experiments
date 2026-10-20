@@ -69,14 +69,13 @@ single-member rule prevents ambiguous solver input selection.
 ### Writing
 
 Generated BAS and EBF files can be plain or gzip-compressed. Both experiment
-runners use plain output by default to preserve the previous behavior. Add:
+runners use gzip-compressed output by default. Pass:
 
 ```bash
---compress-output
+--no-compress-output
 ```
 
-to write generated `.bas.gz` and EBF `.csv.gz` artifacts.
-The default has been changed to compressed output.
+to write plain `.bas` and EBF `.csv` artifacts instead.
 
 ZIP output is intentionally not implemented.
 
@@ -152,11 +151,11 @@ python basis_tools/tests/cross_solver_basis_test.py \
     --consumer-param gurobi=/scratch/htc/lmehl/master_thesis/base_problems/gurobi/parameters/dualsmplx_1Thrd.prm \
     --consumer-param copt=/scratch/htc/lmehl/master_thesis/base_problems/copt/parameters/dualsmplx_1Thrd.par \
     --consumer-param highs=/scratch/htc/lmehl/master_thesis/base_problems/highs/parameters/dualsmplx_serial_1Thrd.txt \
-    --consumer-param highs=/scratch/htc/lmehl/master_thesis/base_problems/xpress/parameters/dualsmplx_1Thrd.prs
+    --consumer-param xpress=/scratch/htc/lmehl/master_thesis/base_problems/xpress/parameters/dualsmplx_1Thrd.prs
 ```
 
-Add `--compress-output` if the generated basis/EBF diagnostics should be
-written as gzip files.
+Pass `--no-compress-output` if the generated basis/EBF diagnostics should be
+written as plain files.
 
 ## Direct imports
 
